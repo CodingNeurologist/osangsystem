@@ -1,0 +1,137 @@
+{
+  "id": "phq9",
+  "title": "우울증 선별 검사 (PHQ-9)",
+  "description": "지난 2주 동안 다음과 같은 문제로 얼마나 자주 불편함을 겪으셨나요?",
+  "version": "1.0",
+  "reference": "Kroenke K, Spitzer RL, Williams JB. The PHQ-9: validity of a brief depression severity measure. J Gen Intern Med. 2001;16(9):606-13.",
+  "scoring": {
+    "method": "sum",
+    "max_score": 27,
+    "reverse_items": []
+  },
+  "severity_levels": [
+    { "min": 0, "max": 4, "label": "정상", "level": "normal" },
+    { "min": 5, "max": 9, "label": "경증", "level": "mild" },
+    { "min": 10, "max": 14, "label": "중등도", "level": "moderate" },
+    { "min": 15, "max": 19, "label": "중증", "level": "severe" },
+    { "min": 20, "max": 27, "label": "위기", "level": "crisis" }
+  ],
+  "safety_protocol": {
+    "trigger_score": 20,
+    "message": "지금 많이 힘드실 것 같습니다. 혼자 감당하지 않으셔도 됩니다. 전문적인 도움을 받으시길 권장합니다.",
+    "crisis_line": "1577-0199",
+    "crisis_line_name": "정신건강위기상담전화",
+    "crisis_line_hours": "24시간 운영",
+    "hospital_message": "오상신경외과에서도 상담을 받으실 수 있습니다."
+  },
+  "score_response": {
+    "normal": "지난 2주 동안 우울 증상이 거의 없었습니다. 현재 상태를 잘 유지하고 계세요.",
+    "mild": "경미한 우울 증상이 있습니다. 호흡 훈련이나 감사일기 작성이 도움이 될 수 있습니다.",
+    "moderate": "중등도 우울 증상이 있습니다. 전문의 상담을 받아보시는 것을 권장합니다.",
+    "severe": "중증 우울 증상이 있습니다. 가능한 빨리 전문의 상담을 받으시기 바랍니다.",
+    "crisis": "지금 매우 힘드신 상황입니다. 즉시 전문적인 도움을 받으세요."
+  },
+  "items": [
+    {
+      "id": "q1",
+      "number": 1,
+      "text": "일 또는 여가 활동을 하는 데 흥미나 즐거움을 느끼지 못함",
+      "options": [
+        { "value": 0, "text": "전혀 없음" },
+        { "value": 1, "text": "며칠 동안" },
+        { "value": 2, "text": "7일 이상" },
+        { "value": 3, "text": "거의 매일" }
+      ]
+    },
+    {
+      "id": "q2",
+      "number": 2,
+      "text": "기분이 가라앉거나, 우울하거나, 희망이 없음",
+      "options": [
+        { "value": 0, "text": "전혀 없음" },
+        { "value": 1, "text": "며칠 동안" },
+        { "value": 2, "text": "7일 이상" },
+        { "value": 3, "text": "거의 매일" }
+      ]
+    },
+    {
+      "id": "q3",
+      "number": 3,
+      "text": "잠들기 어렵거나, 자주 깨거나, 또는 너무 많이 잠",
+      "options": [
+        { "value": 0, "text": "전혀 없음" },
+        { "value": 1, "text": "며칠 동안" },
+        { "value": 2, "text": "7일 이상" },
+        { "value": 3, "text": "거의 매일" }
+      ]
+    },
+    {
+      "id": "q4",
+      "number": 4,
+      "text": "피곤함을 느끼거나 기운이 거의 없음",
+      "options": [
+        { "value": 0, "text": "전혀 없음" },
+        { "value": 1, "text": "며칠 동안" },
+        { "value": 2, "text": "7일 이상" },
+        { "value": 3, "text": "거의 매일" }
+      ]
+    },
+    {
+      "id": "q5",
+      "number": 5,
+      "text": "식욕이 줄거나 과식함",
+      "options": [
+        { "value": 0, "text": "전혀 없음" },
+        { "value": 1, "text": "며칠 동안" },
+        { "value": 2, "text": "7일 이상" },
+        { "value": 3, "text": "거의 매일" }
+      ]
+    },
+    {
+      "id": "q6",
+      "number": 6,
+      "text": "자신이 나쁜 사람이라는 느낌 또는 자신이 실패했거나 자신으로 인해 가족을 힘들게 했다는 느낌",
+      "options": [
+        { "value": 0, "text": "전혀 없음" },
+        { "value": 1, "text": "며칠 동안" },
+        { "value": 2, "text": "7일 이상" },
+        { "value": 3, "text": "거의 매일" }
+      ]
+    },
+    {
+      "id": "q7",
+      "number": 7,
+      "text": "신문을 읽거나 TV를 보는 것 같은 일상적인 활동을 하는 데 집중하기 어려움",
+      "options": [
+        { "value": 0, "text": "전혀 없음" },
+        { "value": 1, "text": "며칠 동안" },
+        { "value": 2, "text": "7일 이상" },
+        { "value": 3, "text": "거의 매일" }
+      ]
+    },
+    {
+      "id": "q8",
+      "number": 8,
+      "text": "다른 사람들이 알아챌 정도로 너무 느리게 움직이거나 말을 함. 또는 반대로 너무 안절부절못하거나 들떠 있어서 평소보다 훨씬 많이 움직임",
+      "options": [
+        { "value": 0, "text": "전혀 없음" },
+        { "value": 1, "text": "며칠 동안" },
+        { "value": 2, "text": "7일 이상" },
+        { "value": 3, "text": "거의 매일" }
+      ]
+    },
+    {
+      "id": "q9",
+      "number": 9,
+      "text": "자신이 죽는 것이 더 낫겠다는 생각 또는 어떻게든 자신을 해치려는 생각",
+      "options": [
+        { "value": 0, "text": "전혀 없음" },
+        { "value": 1, "text": "며칠 동안" },
+        { "value": 2, "text": "7일 이상" },
+        { "value": 3, "text": "거의 매일" }
+      ]
+    }
+  ],
+  "footer_disclaimer": "본 결과는 전문 의료인의 진단을 대체하지 않습니다.",
+  "q9_note": "9번 문항에서 1점 이상 응답 시 전문의 상담을 즉시 권고합니다."
+}

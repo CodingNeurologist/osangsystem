@@ -1,0 +1,284 @@
+{
+  "id": "asrs",
+  "title": "ADHD 자가보고 척도 (ASRS-v1.1)",
+  "description": "지난 6개월 동안 각 항목의 증상이 얼마나 자주 나타났나요?",
+  "version": "1.1",
+  "reference": "Kessler RC, et al. The World Health Organization Adult ADHD Self-Report Scale (ASRS): a short screening scale for use in the general population. Psychol Med. 2005;35(2):245-56.",
+  "scoring": {
+    "method": "asrs_screening",
+    "max_score": 72,
+    "reverse_items": [],
+    "screening_items": ["q1", "q2", "q3", "q4", "q5", "q6"],
+    "screening_threshold": 4,
+    "screening_note": "1~6번 문항 중 4개 이상에서 특정 값 이상이면 ADHD 양성 가능성",
+    "screening_cutoffs": {
+      "q1": 2,
+      "q2": 2,
+      "q3": 3,
+      "q4": 3,
+      "q5": 3,
+      "q6": 3
+    }
+  },
+  "severity_levels": [
+    { "min": 0, "max": 100, "label": "음성", "level": "normal" },
+    { "min": 0, "max": 100, "label": "양성", "level": "moderate" }
+  ],
+  "screening_result": {
+    "positive": "ADHD 증상이 의심됩니다. 전문의와 상담하시기 바랍니다.",
+    "negative": "현재 응답 패턴에서 ADHD 가능성이 낮습니다."
+  },
+  "score_response": {
+    "normal": "선별 결과 음성입니다. ADHD 증상이 뚜렷하게 나타나지 않았습니다.",
+    "moderate": "선별 결과 양성입니다. 전문의 상담을 통해 정확한 평가를 받아보세요."
+  },
+  "items": [
+    {
+      "id": "q1",
+      "number": 1,
+      "part": "A",
+      "text": "어떤 일의 어려운 부분은 끝내 놓고, 그것을 마무리 짓지 못해 곤란을 겪은 적이 있나요?",
+      "options": [
+        { "value": 0, "text": "전혀 없음" },
+        { "value": 1, "text": "드물게" },
+        { "value": 2, "text": "때때로" },
+        { "value": 3, "text": "자주" },
+        { "value": 4, "text": "매우 자주" }
+      ],
+      "screening": true,
+      "screening_cutoff": 2
+    },
+    {
+      "id": "q2",
+      "number": 2,
+      "part": "A",
+      "text": "체계적으로 일을 해야 할 때 어려움을 겪은 적이 있나요?",
+      "options": [
+        { "value": 0, "text": "전혀 없음" },
+        { "value": 1, "text": "드물게" },
+        { "value": 2, "text": "때때로" },
+        { "value": 3, "text": "자주" },
+        { "value": 4, "text": "매우 자주" }
+      ],
+      "screening": true,
+      "screening_cutoff": 2
+    },
+    {
+      "id": "q3",
+      "number": 3,
+      "part": "A",
+      "text": "약속이나 해야 할 일을 기억하는 데 어려움을 겪은 적이 있나요?",
+      "options": [
+        { "value": 0, "text": "전혀 없음" },
+        { "value": 1, "text": "드물게" },
+        { "value": 2, "text": "때때로" },
+        { "value": 3, "text": "자주" },
+        { "value": 4, "text": "매우 자주" }
+      ],
+      "screening": true,
+      "screening_cutoff": 3
+    },
+    {
+      "id": "q4",
+      "number": 4,
+      "part": "A",
+      "text": "골치 아픈 일을 피하거나 미루었나요?",
+      "options": [
+        { "value": 0, "text": "전혀 없음" },
+        { "value": 1, "text": "드물게" },
+        { "value": 2, "text": "때때로" },
+        { "value": 3, "text": "자주" },
+        { "value": 4, "text": "매우 자주" }
+      ],
+      "screening": true,
+      "screening_cutoff": 3
+    },
+    {
+      "id": "q5",
+      "number": 5,
+      "part": "A",
+      "text": "오래 앉아 있을 때 손발을 꼼지락거리거나 몸을 움직이게 되었나요?",
+      "options": [
+        { "value": 0, "text": "전혀 없음" },
+        { "value": 1, "text": "드물게" },
+        { "value": 2, "text": "때때로" },
+        { "value": 3, "text": "자주" },
+        { "value": 4, "text": "매우 자주" }
+      ],
+      "screening": true,
+      "screening_cutoff": 3
+    },
+    {
+      "id": "q6",
+      "number": 6,
+      "part": "A",
+      "text": "마치 모터가 달린 것처럼 지나치게 활동적이었거나, 무언가를 하지 않으면 안 될 것 같은 느낌이 들었나요?",
+      "options": [
+        { "value": 0, "text": "전혀 없음" },
+        { "value": 1, "text": "드물게" },
+        { "value": 2, "text": "때때로" },
+        { "value": 3, "text": "자주" },
+        { "value": 4, "text": "매우 자주" }
+      ],
+      "screening": true,
+      "screening_cutoff": 3
+    },
+    {
+      "id": "q7",
+      "number": 7,
+      "part": "B",
+      "text": "부주의한 실수를 했거나, 지루하거나 어려운 일을 할 때 실수를 한 적이 있나요?",
+      "options": [
+        { "value": 0, "text": "전혀 없음" },
+        { "value": 1, "text": "드물게" },
+        { "value": 2, "text": "때때로" },
+        { "value": 3, "text": "자주" },
+        { "value": 4, "text": "매우 자주" }
+      ]
+    },
+    {
+      "id": "q8",
+      "number": 8,
+      "part": "B",
+      "text": "지루하거나 반복적인 과제를 할 때 집중하기 어려웠나요?",
+      "options": [
+        { "value": 0, "text": "전혀 없음" },
+        { "value": 1, "text": "드물게" },
+        { "value": 2, "text": "때때로" },
+        { "value": 3, "text": "자주" },
+        { "value": 4, "text": "매우 자주" }
+      ]
+    },
+    {
+      "id": "q9",
+      "number": 9,
+      "part": "B",
+      "text": "직접 말하는 사람에게 집중하기 어려웠나요?",
+      "options": [
+        { "value": 0, "text": "전혀 없음" },
+        { "value": 1, "text": "드물게" },
+        { "value": 2, "text": "때때로" },
+        { "value": 3, "text": "자주" },
+        { "value": 4, "text": "매우 자주" }
+      ]
+    },
+    {
+      "id": "q10",
+      "number": 10,
+      "part": "B",
+      "text": "지시에 따라 물건을 찾거나 두었던 곳을 잊어버린 적이 있나요?",
+      "options": [
+        { "value": 0, "text": "전혀 없음" },
+        { "value": 1, "text": "드물게" },
+        { "value": 2, "text": "때때로" },
+        { "value": 3, "text": "자주" },
+        { "value": 4, "text": "매우 자주" }
+      ]
+    },
+    {
+      "id": "q11",
+      "number": 11,
+      "part": "B",
+      "text": "외부 자극이나 소음으로 인해 쉽게 산만해진 적이 있나요?",
+      "options": [
+        { "value": 0, "text": "전혀 없음" },
+        { "value": 1, "text": "드물게" },
+        { "value": 2, "text": "때때로" },
+        { "value": 3, "text": "자주" },
+        { "value": 4, "text": "매우 자주" }
+      ]
+    },
+    {
+      "id": "q12",
+      "number": 12,
+      "part": "B",
+      "text": "회의나 다른 상황에서 자리를 벗어났나요?",
+      "options": [
+        { "value": 0, "text": "전혀 없음" },
+        { "value": 1, "text": "드물게" },
+        { "value": 2, "text": "때때로" },
+        { "value": 3, "text": "자주" },
+        { "value": 4, "text": "매우 자주" }
+      ]
+    },
+    {
+      "id": "q13",
+      "number": 13,
+      "part": "B",
+      "text": "안절부절 못하거나 지나치게 몸을 움직였나요?",
+      "options": [
+        { "value": 0, "text": "전혀 없음" },
+        { "value": 1, "text": "드물게" },
+        { "value": 2, "text": "때때로" },
+        { "value": 3, "text": "자주" },
+        { "value": 4, "text": "매우 자주" }
+      ]
+    },
+    {
+      "id": "q14",
+      "number": 14,
+      "part": "B",
+      "text": "활동 중에 쉬거나 느긋하게 있기 어려웠나요?",
+      "options": [
+        { "value": 0, "text": "전혀 없음" },
+        { "value": 1, "text": "드물게" },
+        { "value": 2, "text": "때때로" },
+        { "value": 3, "text": "자주" },
+        { "value": 4, "text": "매우 자주" }
+      ]
+    },
+    {
+      "id": "q15",
+      "number": 15,
+      "part": "B",
+      "text": "사회적 상황이나 대화 중에 말이 너무 많았나요?",
+      "options": [
+        { "value": 0, "text": "전혀 없음" },
+        { "value": 1, "text": "드물게" },
+        { "value": 2, "text": "때때로" },
+        { "value": 3, "text": "자주" },
+        { "value": 4, "text": "매우 자주" }
+      ]
+    },
+    {
+      "id": "q16",
+      "number": 16,
+      "part": "B",
+      "text": "대화할 때 상대방의 말이 끝나기 전에 끼어든 적이 있나요?",
+      "options": [
+        { "value": 0, "text": "전혀 없음" },
+        { "value": 1, "text": "드물게" },
+        { "value": 2, "text": "때때로" },
+        { "value": 3, "text": "자주" },
+        { "value": 4, "text": "매우 자주" }
+      ]
+    },
+    {
+      "id": "q17",
+      "number": 17,
+      "part": "B",
+      "text": "차례를 기다리기 어려웠나요?",
+      "options": [
+        { "value": 0, "text": "전혀 없음" },
+        { "value": 1, "text": "드물게" },
+        { "value": 2, "text": "때때로" },
+        { "value": 3, "text": "자주" },
+        { "value": 4, "text": "매우 자주" }
+      ]
+    },
+    {
+      "id": "q18",
+      "number": 18,
+      "part": "B",
+      "text": "바쁜 사람들의 일을 방해하거나 그들이 하는 일에 끼어든 적이 있나요?",
+      "options": [
+        { "value": 0, "text": "전혀 없음" },
+        { "value": 1, "text": "드물게" },
+        { "value": 2, "text": "때때로" },
+        { "value": 3, "text": "자주" },
+        { "value": 4, "text": "매우 자주" }
+      ]
+    }
+  ],
+  "footer_disclaimer": "본 결과는 전문 의료인의 진단을 대체하지 않습니다."
+}

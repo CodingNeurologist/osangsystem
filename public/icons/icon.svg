@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- 배경 원 -->
+  <circle cx="256" cy="256" r="256" fill="#0284c7"/>
+  <!-- 흰색 십자 (의료 심볼) -->
+  <rect x="216" y="140" width="80" height="232" rx="16" fill="white"/>
+  <rect x="140" y="216" width="232" height="80" rx="16" fill="white"/>
+</svg>

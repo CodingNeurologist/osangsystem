@@ -1,0 +1,442 @@
+{
+  "id": "compass31",
+  "title": "자율신경 기능 종합 평가 (COMPASS-31)",
+  "description": "지난 1년 동안 경험한 증상에 대해 응답해 주세요. 증상이 없으면 '없음'을 선택하세요.",
+  "version": "1.0",
+  "reference": "Sletten DM, et al. COMPASS 31: a refined and abbreviated composite autonomic symptom score. Mayo Clin Proc. 2012;87(12):1196-201.",
+  "scoring": {
+    "method": "weighted_domain",
+    "max_score": 100,
+    "domains": [
+      {
+        "id": "oi",
+        "name": "기립성 저혈압",
+        "weight": 40,
+        "items": ["q1", "q2", "q3", "q4"],
+        "max_raw_score": 3
+      },
+      {
+        "id": "vm",
+        "name": "혈관운동",
+        "weight": 5,
+        "items": ["q5", "q6", "q7", "q8", "q9"],
+        "max_raw_score": 4
+      },
+      {
+        "id": "sm",
+        "name": "분비",
+        "weight": 15,
+        "items": ["q10", "q11", "q12", "q13", "q14", "q15", "q16", "q17", "q18", "q19", "q20"],
+        "max_raw_score": 10
+      },
+      {
+        "id": "gi",
+        "name": "위장관",
+        "weight": 25,
+        "items": ["q21", "q22", "q23", "q24", "q25", "q26", "q27"],
+        "max_raw_score": 6
+      },
+      {
+        "id": "bl",
+        "name": "방광",
+        "weight": 10,
+        "items": ["q28", "q29", "q30"],
+        "max_raw_score": 2
+      },
+      {
+        "id": "pm",
+        "name": "동공/시각",
+        "weight": 5,
+        "items": ["q31"],
+        "max_raw_score": 1
+      }
+    ]
+  },
+  "severity_levels": [
+    { "min": 0, "max": 16, "label": "정상", "level": "normal" },
+    { "min": 16.01, "max": 40, "label": "경증", "level": "mild" },
+    { "min": 40.01, "max": 70, "label": "중등도", "level": "moderate" },
+    { "min": 70.01, "max": 100, "label": "중증", "level": "severe" }
+  ],
+  "items": [
+    {
+      "id": "q1",
+      "number": 1,
+      "domain": "oi",
+      "text": "누워 있다가 일어설 때 또는 오래 서 있을 때 어지럼증이나 현기증을 느낀 적이 있나요?",
+      "options": [
+        { "value": 0, "text": "없음" },
+        { "value": 1, "text": "가끔 (월 1~2회)" },
+        { "value": 2, "text": "자주 (주 1~2회)" },
+        { "value": 3, "text": "매우 자주 (거의 매일)" }
+      ]
+    },
+    {
+      "id": "q2",
+      "number": 2,
+      "domain": "oi",
+      "text": "누워 있다가 일어설 때 시야가 흐려지거나 눈앞이 깜깜해진 적이 있나요?",
+      "options": [
+        { "value": 0, "text": "없음" },
+        { "value": 1, "text": "가끔" },
+        { "value": 2, "text": "자주" },
+        { "value": 3, "text": "매우 자주" }
+      ]
+    },
+    {
+      "id": "q3",
+      "number": 3,
+      "domain": "oi",
+      "text": "일어설 때 심장이 빠르게 뛰거나 두근거리는 느낌이 있나요?",
+      "options": [
+        { "value": 0, "text": "없음" },
+        { "value": 1, "text": "가끔" },
+        { "value": 2, "text": "자주" },
+        { "value": 3, "text": "매우 자주" }
+      ]
+    },
+    {
+      "id": "q4",
+      "number": 4,
+      "domain": "oi",
+      "text": "오래 서 있거나 더운 환경에서 쓰러질 것 같은 느낌이 든 적이 있나요?",
+      "options": [
+        { "value": 0, "text": "없음" },
+        { "value": 1, "text": "가끔" },
+        { "value": 2, "text": "자주" },
+        { "value": 3, "text": "매우 자주" }
+      ]
+    },
+    {
+      "id": "q5",
+      "number": 5,
+      "domain": "vm",
+      "text": "손발이 비정상적으로 창백해지거나 파랗게 변한 적이 있나요?",
+      "options": [
+        { "value": 0, "text": "없음" },
+        { "value": 1, "text": "가끔" },
+        { "value": 2, "text": "자주" },
+        { "value": 3, "text": "매우 자주" },
+        { "value": 4, "text": "항상" }
+      ]
+    },
+    {
+      "id": "q6",
+      "number": 6,
+      "domain": "vm",
+      "text": "추위와 관계없이 손발이 매우 차갑게 느껴지나요?",
+      "options": [
+        { "value": 0, "text": "없음" },
+        { "value": 1, "text": "가끔" },
+        { "value": 2, "text": "자주" },
+        { "value": 3, "text": "매우 자주" },
+        { "value": 4, "text": "항상" }
+      ]
+    },
+    {
+      "id": "q7",
+      "number": 7,
+      "domain": "vm",
+      "text": "손이나 발이 예상치 못하게 붉게 변하거나 열이 나는 느낌이 있나요?",
+      "options": [
+        { "value": 0, "text": "없음" },
+        { "value": 1, "text": "가끔" },
+        { "value": 2, "text": "자주" },
+        { "value": 3, "text": "매우 자주" },
+        { "value": 4, "text": "항상" }
+      ]
+    },
+    {
+      "id": "q8",
+      "number": 8,
+      "domain": "vm",
+      "text": "별다른 이유 없이 얼굴이 붉어지거나 홍조가 생기나요?",
+      "options": [
+        { "value": 0, "text": "없음" },
+        { "value": 1, "text": "가끔" },
+        { "value": 2, "text": "자주" },
+        { "value": 3, "text": "매우 자주" },
+        { "value": 4, "text": "항상" }
+      ]
+    },
+    {
+      "id": "q9",
+      "number": 9,
+      "domain": "vm",
+      "text": "식사 후 특히 얼굴이 붉어지거나 땀이 나나요?",
+      "options": [
+        { "value": 0, "text": "없음" },
+        { "value": 1, "text": "가끔" },
+        { "value": 2, "text": "자주" },
+        { "value": 3, "text": "매우 자주" },
+        { "value": 4, "text": "항상" }
+      ]
+    },
+    {
+      "id": "q10",
+      "number": 10,
+      "domain": "sm",
+      "text": "이유 없이 입이 지속적으로 건조한가요?",
+      "options": [
+        { "value": 0, "text": "없음" },
+        { "value": 1, "text": "가끔" },
+        { "value": 2, "text": "자주" },
+        { "value": 3, "text": "매우 자주" }
+      ]
+    },
+    {
+      "id": "q11",
+      "number": 11,
+      "domain": "sm",
+      "text": "눈이 지속적으로 건조하거나 이물감이 있나요?",
+      "options": [
+        { "value": 0, "text": "없음" },
+        { "value": 1, "text": "가끔" },
+        { "value": 2, "text": "자주" },
+        { "value": 3, "text": "매우 자주" }
+      ]
+    },
+    {
+      "id": "q12",
+      "number": 12,
+      "domain": "sm",
+      "text": "음식을 먹지 않아도 과도하게 침이 분비되나요?",
+      "options": [
+        { "value": 0, "text": "없음" },
+        { "value": 1, "text": "가끔" },
+        { "value": 2, "text": "자주" },
+        { "value": 3, "text": "매우 자주" }
+      ]
+    },
+    {
+      "id": "q13",
+      "number": 13,
+      "domain": "sm",
+      "text": "땀이 정상보다 훨씬 적게 나나요?",
+      "options": [
+        { "value": 0, "text": "없음" },
+        { "value": 1, "text": "약간" },
+        { "value": 2, "text": "상당히" },
+        { "value": 3, "text": "전혀 나지 않음" }
+      ]
+    },
+    {
+      "id": "q14",
+      "number": 14,
+      "domain": "sm",
+      "text": "땀이 정상보다 훨씬 많이 나나요?",
+      "options": [
+        { "value": 0, "text": "없음" },
+        { "value": 1, "text": "약간" },
+        { "value": 2, "text": "상당히" },
+        { "value": 3, "text": "매우 많이" }
+      ]
+    },
+    {
+      "id": "q15",
+      "number": 15,
+      "domain": "sm",
+      "text": "신체 특정 부위에서만 과도하게 땀이 나나요?",
+      "options": [
+        { "value": 0, "text": "없음" },
+        { "value": 1, "text": "가끔" },
+        { "value": 2, "text": "자주" },
+        { "value": 3, "text": "매우 자주" }
+      ]
+    },
+    {
+      "id": "q16",
+      "number": 16,
+      "domain": "sm",
+      "text": "식사 중이나 식사 후에 얼굴이나 목에 땀이 과도하게 나나요?",
+      "options": [
+        { "value": 0, "text": "없음" },
+        { "value": 1, "text": "가끔" },
+        { "value": 2, "text": "자주" },
+        { "value": 3, "text": "매우 자주" }
+      ]
+    },
+    {
+      "id": "q17",
+      "number": 17,
+      "domain": "sm",
+      "text": "밤에 자면서 땀을 많이 흘리나요?",
+      "options": [
+        { "value": 0, "text": "없음" },
+        { "value": 1, "text": "가끔" },
+        { "value": 2, "text": "자주" },
+        { "value": 3, "text": "거의 매일" }
+      ]
+    },
+    {
+      "id": "q18",
+      "number": 18,
+      "domain": "sm",
+      "text": "피부가 지나치게 건조한가요?",
+      "options": [
+        { "value": 0, "text": "없음" },
+        { "value": 1, "text": "약간" },
+        { "value": 2, "text": "상당히" },
+        { "value": 3, "text": "매우 심하게" }
+      ]
+    },
+    {
+      "id": "q19",
+      "number": 19,
+      "domain": "sm",
+      "text": "피부가 과도하게 기름지거나 번들거리나요?",
+      "options": [
+        { "value": 0, "text": "없음" },
+        { "value": 1, "text": "약간" },
+        { "value": 2, "text": "상당히" },
+        { "value": 3, "text": "매우 심하게" }
+      ]
+    },
+    {
+      "id": "q20",
+      "number": 20,
+      "domain": "sm",
+      "text": "코가 지속적으로 건조하거나, 반대로 콧물이 과도하게 나오나요?",
+      "options": [
+        { "value": 0, "text": "없음" },
+        { "value": 1, "text": "가끔" },
+        { "value": 2, "text": "자주" },
+        { "value": 3, "text": "항상" }
+      ]
+    },
+    {
+      "id": "q21",
+      "number": 21,
+      "domain": "gi",
+      "text": "음식을 조금만 먹어도 금방 배가 부르거나, 식사 후 복부가 불편한가요?",
+      "options": [
+        { "value": 0, "text": "없음" },
+        { "value": 1, "text": "가끔" },
+        { "value": 2, "text": "자주" },
+        { "value": 3, "text": "거의 매 식사" }
+      ]
+    },
+    {
+      "id": "q22",
+      "number": 22,
+      "domain": "gi",
+      "text": "이유 없이 메스껍거나 구역감이 있나요?",
+      "options": [
+        { "value": 0, "text": "없음" },
+        { "value": 1, "text": "가끔" },
+        { "value": 2, "text": "자주" },
+        { "value": 3, "text": "거의 매일" }
+      ]
+    },
+    {
+      "id": "q23",
+      "number": 23,
+      "domain": "gi",
+      "text": "구역감 외에 실제로 구토를 한 적이 있나요?",
+      "options": [
+        { "value": 0, "text": "없음" },
+        { "value": 1, "text": "가끔" },
+        { "value": 2, "text": "자주" },
+        { "value": 3, "text": "매우 자주" }
+      ]
+    },
+    {
+      "id": "q24",
+      "number": 24,
+      "domain": "gi",
+      "text": "변비가 있나요? (3일 이상 배변이 없거나 배변이 힘든 경우)",
+      "options": [
+        { "value": 0, "text": "없음" },
+        { "value": 1, "text": "가끔" },
+        { "value": 2, "text": "자주" },
+        { "value": 3, "text": "항상" }
+      ]
+    },
+    {
+      "id": "q25",
+      "number": 25,
+      "domain": "gi",
+      "text": "설사가 있나요? (하루 3회 이상 묽은 변)",
+      "options": [
+        { "value": 0, "text": "없음" },
+        { "value": 1, "text": "가끔" },
+        { "value": 2, "text": "자주" },
+        { "value": 3, "text": "거의 매일" }
+      ]
+    },
+    {
+      "id": "q26",
+      "number": 26,
+      "domain": "gi",
+      "text": "대변을 참기 어렵거나 갑자기 화장실에 달려가야 하는 경우가 있나요?",
+      "options": [
+        { "value": 0, "text": "없음" },
+        { "value": 1, "text": "가끔" },
+        { "value": 2, "text": "자주" },
+        { "value": 3, "text": "거의 매일" }
+      ]
+    },
+    {
+      "id": "q27",
+      "number": 27,
+      "domain": "gi",
+      "text": "식사 후 복부 팽만감이나 가스가 차는 느낌이 있나요?",
+      "options": [
+        { "value": 0, "text": "없음" },
+        { "value": 1, "text": "가끔" },
+        { "value": 2, "text": "자주" },
+        { "value": 3, "text": "거의 매 식사" }
+      ]
+    },
+    {
+      "id": "q28",
+      "number": 28,
+      "domain": "bl",
+      "text": "소변이 자주 마렵거나 급하게 화장실에 가야 하는 경우가 있나요?",
+      "options": [
+        { "value": 0, "text": "없음" },
+        { "value": 1, "text": "가끔" },
+        { "value": 2, "text": "자주" }
+      ]
+    },
+    {
+      "id": "q29",
+      "number": 29,
+      "domain": "bl",
+      "text": "소변을 보기 어렵거나 소변 줄기가 약한 편인가요?",
+      "options": [
+        { "value": 0, "text": "없음" },
+        { "value": 1, "text": "가끔" },
+        { "value": 2, "text": "자주" }
+      ]
+    },
+    {
+      "id": "q30",
+      "number": 30,
+      "domain": "bl",
+      "text": "요실금(소변을 참지 못하고 새는 경우)이 있나요?",
+      "options": [
+        { "value": 0, "text": "없음" },
+        { "value": 1, "text": "가끔" },
+        { "value": 2, "text": "자주" }
+      ]
+    },
+    {
+      "id": "q31",
+      "number": 31,
+      "domain": "pm",
+      "text": "밝은 곳에서 어두운 곳으로 이동할 때 눈이 적응하는 데 시간이 오래 걸리거나, 어두운 곳에서 사물 보기가 힘든가요?",
+      "options": [
+        { "value": 0, "text": "없음" },
+        { "value": 1, "text": "약간 그렇다" }
+      ]
+    }
+  ],
+  "footer_disclaimer": "본 결과는 전문 의료인의 진단을 대체하지 않습니다. 이 결과를 바탕으로 의료진과 상담하시면 더 정확한 평가를 받으실 수 있습니다.",
+  "patient_result_description": {
+    "normal": "자율신경 기능이 대체로 정상 범위입니다.",
+    "mild": "자율신경 기능에 경미한 이상 소견이 있습니다. 생활 습관 개선이 도움이 될 수 있습니다.",
+    "moderate": "자율신경 기능에 중등도 이상 소견이 있습니다. 전문의 상담을 권장합니다.",
+    "severe": "자율신경 기능에 심각한 이상 소견이 있습니다. 가능한 빨리 전문의 상담을 받으시기 바랍니다."
+  }
+}
