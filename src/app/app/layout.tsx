@@ -19,23 +19,10 @@ export default async function AppLayout({
     redirect('/login')
   }
 
-  // 필수 프로필 미완성 시 온보딩으로 이동
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('gender, birth_date, primary_symptoms, privacy_consent_at')
-    .eq('id', user.id)
-    .single()
-
-  const needsOnboarding =
-    !profile?.gender ||
-    !profile?.birth_date ||
-    !profile?.primary_symptoms?.length ||
-    !profile?.privacy_consent_at
-
   return (
     <div className="min-h-screen bg-background">
-      <AppNav userId={user.id} needsOnboarding={needsOnboarding} />
-      <main className="max-w-2xl mx-auto px-4 py-6">
+      <AppNav />
+      <main className="max-w-2xl mx-auto px-4 py-6 pb-24">
         {children}
       </main>
     </div>

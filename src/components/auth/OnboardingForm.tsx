@@ -77,24 +77,30 @@ export default function OnboardingForm() {
     setServerError(null)
 
     const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
 
-    if (!user) {
-      setServerError('로그인이 필요합니다.')
+    if (authError || !user) {
+      setServerError('로그인 세션이 만료되었습니다. 다시 로그인해 주세요.')
       setIsLoading(false)
       return
     }
 
-    const { error } = await supabase.from('profiles').update({
-      gender: data.gender,
-      birth_date: data.birth_date,
-      primary_symptoms: data.primary_symptoms,
-      privacy_consent_at: new Date().toISOString(),
-      privacy_consent_version: '1.0',
-    }).eq('id', user.id)
+    // RLS 정책이 UPDATE만 허용하므로 update 사용
+    // (프로필 행은 회원가입 트리거로 자동 생성됨)
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        gender: data.gender,
+        birth_date: data.birth_date,
+        primary_symptoms: data.primary_symptoms,
+        privacy_consent_at: new Date().toISOString(),
+        privacy_consent_version: '1.0',
+      })
+      .eq('id', user.id)
 
     if (error) {
-      setServerError('저장 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.')
+      console.error('Profile update error:', error)
+      setServerError(`저장 중 오류가 발생했습니다: ${error.message}`)
       setIsLoading(false)
       return
     }

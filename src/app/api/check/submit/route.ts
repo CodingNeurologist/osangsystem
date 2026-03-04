@@ -6,7 +6,7 @@ import { randomUUID } from 'crypto'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { responses, total_score, domain_scores, severity_level } = body
+    const { responses, total_score, domain_scores, severity_level, duration } = body
 
     // 쿠키에서 세션 ID 가져오거나 생성
     const cookieStore = await cookies()
@@ -18,13 +18,17 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createServiceClient()
 
+    // total_score는 Math.round() 처리 (INTEGER 컬럼)
+    const roundedScore = typeof total_score === 'number' ? Math.round(total_score) : total_score
+
     const { error } = await supabase.from('anonymous_assessments').insert({
       session_id: sessionId,
       survey_type: 'compass31',
       responses,
-      total_score,
+      total_score: roundedScore,
       domain_scores,
       severity_level,
+      duration: duration ?? 0,
     })
 
     if (error) {

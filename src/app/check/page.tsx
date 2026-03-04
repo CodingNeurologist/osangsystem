@@ -1,20 +1,43 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import {
+  Moon,
+  Heart,
+  Brain,
+  Activity,
+  Utensils,
+  Droplets,
+  Bone,
+  Shield,
+  type LucideIcon,
+} from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 
 export const metadata: Metadata = {
-  title: '자율신경실조증 자가진단',
+  title: '자율신경 스트레스 자가체크',
 }
 
-const DOMAINS = [
-  '기립성 저혈압 관련 증상',
-  '혈관운동 증상',
-  '분비 기능 관련 증상',
-  '위장관 증상',
-  '방광 관련 증상',
-  '동공 및 시각 증상',
+const ICON_MAP: Record<string, LucideIcon> = {
+  Moon,
+  Heart,
+  Brain,
+  Activity,
+  Utensils,
+  Droplets,
+  Bone,
+  Shield,
+}
+
+const CATEGORIES = [
+  { icon: 'Moon', name: '수면습관', color: 'bg-indigo-50 text-indigo-600' },
+  { icon: 'Heart', name: '기분/감정', color: 'bg-rose-50 text-rose-600' },
+  { icon: 'Brain', name: '뇌기능/인지', color: 'bg-violet-50 text-violet-600' },
+  { icon: 'Activity', name: '순환기계', color: 'bg-red-50 text-red-600' },
+  { icon: 'Utensils', name: '소화기계', color: 'bg-amber-50 text-amber-600' },
+  { icon: 'Droplets', name: '비뇨생식기계', color: 'bg-cyan-50 text-cyan-600' },
+  { icon: 'Bone', name: '근골격/통증', color: 'bg-orange-50 text-orange-600' },
+  { icon: 'Shield', name: '면역/호르몬', color: 'bg-emerald-50 text-emerald-600' },
 ]
 
 export default function CheckPage() {
@@ -31,34 +54,39 @@ export default function CheckPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-xl">
-              자율신경실조증 자가진단
+              자율신경 스트레스 자가체크
             </CardTitle>
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-              COMPASS-31 기반 자율신경 기능 평가 설문입니다.
-              6개 영역, 총 31개 문항으로 구성되어 있으며 약 10분 소요됩니다.
+              8개 영역의 자율신경 관련 증상을 간편하게 점검해보세요.
+              체크리스트 형식으로 약 3-5분 소요됩니다.
             </p>
           </CardHeader>
           <CardContent className="space-y-6">
             {/* 안내 박스 */}
             <div className="rounded-lg p-4 text-sm space-y-1 bg-primary/5 text-zinc-700">
-              <p>이 설문은 의료 전문가의 진단을 대체하지 않습니다.</p>
+              <p>이 체크리스트는 의료 전문가의 진단을 대체하지 않습니다.</p>
               <p>결과는 참고 목적으로만 활용하시고, 증상이 지속되면 의료진과 상담하세요.</p>
             </div>
 
-            {/* 영역 목록 */}
-            <div className="space-y-2">
-              {DOMAINS.map((domain, i) => (
-                <div key={i} className="flex items-center gap-3 text-sm">
-                  <Badge className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs p-0">
-                    {i + 1}
-                  </Badge>
-                  <span className="text-foreground">{domain}</span>
-                </div>
-              ))}
+            {/* 카테고리 프리뷰 */}
+            <div className="grid grid-cols-4 gap-3">
+              {CATEGORIES.map((cat) => {
+                const Icon = ICON_MAP[cat.icon] ?? Activity
+                return (
+                  <div key={cat.name} className="flex flex-col items-center gap-1.5">
+                    <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${cat.color}`}>
+                      <Icon className="h-5 w-5" />
+                    </div>
+                    <span className="text-[10px] text-zinc-500 text-center leading-tight">
+                      {cat.name}
+                    </span>
+                  </div>
+                )
+              })}
             </div>
 
             <Button className="w-full py-4" size="lg" asChild>
-              <Link href="/check/survey">자가진단 시작하기</Link>
+              <Link href="/check/survey">자가체크 시작하기</Link>
             </Button>
 
             <p className="text-xs text-center text-muted-foreground mt-4">

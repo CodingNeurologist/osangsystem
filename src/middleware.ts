@@ -15,6 +15,38 @@ export async function middleware(request: NextRequest) {
       url.searchParams.set('redirectTo', pathname)
       return NextResponse.redirect(url)
     }
+
+    // 온보딩 미완성 시 강제 리다이렉트 (온보딩 페이지 자체는 제외)
+    if (!pathname.startsWith('/app/onboarding')) {
+      const supabaseService = createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        {
+          cookies: {
+            getAll() { return request.cookies.getAll() },
+            setAll() {},
+          },
+        }
+      )
+
+      const { data: profile } = await supabaseService
+        .from('profiles')
+        .select('gender, birth_date, primary_symptoms, privacy_consent_at')
+        .eq('id', user.id)
+        .single()
+
+      const needsOnboarding =
+        !profile?.gender ||
+        !profile?.birth_date ||
+        !profile?.primary_symptoms?.length ||
+        !profile?.privacy_consent_at
+
+      if (needsOnboarding) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/app/onboarding'
+        return NextResponse.redirect(url)
+      }
+    }
   }
 
   // /admin/* 경로: 관리자 권한 필수

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import AdminOverview from '@/components/admin/AdminOverview'
 import AdminCharts from '@/components/admin/AdminCharts'
+import AdminNeuralReset from '@/components/admin/AdminNeuralReset'
 
 export const metadata: Metadata = {
   title: '관리자 대시보드',
@@ -17,6 +18,7 @@ export default function AdminDashboardPage() {
       </div>
 
       <AdminOverview />
+      <AdminNeuralReset />
       <AdminCharts />
     </div>
   )

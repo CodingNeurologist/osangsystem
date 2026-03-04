@@ -16,9 +16,12 @@
 반드시 아래 순서대로 실행:
 
 ```
-1. .claude/skills/supabase-setup/scripts/init-schema.sql
-2. .claude/skills/supabase-setup/scripts/rls-policies.sql
-3. output/schemas/music-tracks.sql
+1. .claude/skills/supabase-setup/scripts/init-schema.sql    (기본 테이블)
+2. .claude/skills/supabase-setup/scripts/rls-policies.sql   (RLS 정책)
+3. output/schemas/music-tracks.sql                          (음악 트랙)
+4. output/schemas/educational-contents.sql                  (교육 콘텐츠)
+5. output/schemas/neural-reset.sql                          (뉴럴리셋)
+6. output/schemas/set-super-admin.sql                       (최초 관리자, 이메일 수정 후)
 ```
 
 ### 3. Supabase Auth 설정
@@ -63,7 +66,7 @@ VAPID_PRIVATE_KEY=...
 VAPID_SUBJECT=mailto:admin@osangneurology.com
 
 NEXT_PUBLIC_APP_URL=http://localhost:3000
-NEXT_PUBLIC_HOSPITAL_PHONE=031-000-0000
+NEXT_PUBLIC_HOSPITAL_PHONE=1599-5453
 ```
 
 ---
@@ -164,6 +167,21 @@ Supabase Dashboard → Project Settings → Backups:
 
 ---
 
+## Supabase 프로덕션 체크리스트
+
+- [ ] 모든 SQL 스크립트 실행 완료 (6개 파일)
+- [ ] RLS 정책 적용 확인 (14개 테이블 모두)
+- [ ] Email Auth 활성화
+- [ ] 카카오 OAuth 설정 + Redirect URI 등록
+- [ ] Google OAuth 설정 + Redirect URI 등록
+- [ ] Site URL을 프로덕션 도메인으로 설정
+- [ ] Redirect URLs에 프로덕션 도메인 추가
+- [ ] super_admin 계정 생성 확인
+- [ ] 백업 설정 (Pro 플랜 시 PITR 활성화)
+- [ ] 인덱스 확인 (init-schema.sql에 포함됨)
+
+---
+
 ## 문제 해결
 
 | 증상 | 원인 | 해결 |
@@ -172,3 +190,5 @@ Supabase Dashboard → Project Settings → Backups:
 | RLS 오류 (permission denied) | RLS 정책 미적용 | rls-policies.sql 재실행 |
 | 소셜 로그인 실패 | OAuth redirect URI 불일치 | 카카오/구글 콘솔 + Supabase 설정 비교 |
 | 빌드 오류 | 환경변수 누락 | Vercel 환경변수 전체 확인 |
+| metadataBase 경고 | `NEXT_PUBLIC_APP_URL` 미설정 | Vercel 환경변수에 프로덕션 URL 추가 |
+| 푸시 알림 미작동 | VAPID 키 미설정 또는 HTTPS 필요 | Vercel 환경변수 + HTTPS 확인 |

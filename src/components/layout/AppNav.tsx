@@ -1,41 +1,55 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
-import { Home, ClipboardList, TrendingUp, BookOpen, Music, LogOut, Heart } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-
-interface AppNavProps {
-  userId: string
-  needsOnboarding: boolean
-}
+import { usePathname } from 'next/navigation'
+import { Home, ClipboardList, Brain, Heart, User } from 'lucide-react'
 
 const NAV_ITEMS = [
-  { href: '/app',         label: '홈',  icon: Home,          exact: true },
-  { href: '/app/survey',  label: '설문', icon: ClipboardList, exact: false },
-  { href: '/app/chart',   label: '추이', icon: TrendingUp,    exact: false },
-  { href: '/app/health-info', label: '건강', icon: Heart,     exact: false },
-  { href: '/app/journal', label: '일기', icon: BookOpen,      exact: false },
+  {
+    href: '/app',
+    label: '홈',
+    icon: Home,
+    matchPaths: ['/app'],
+    exact: true,
+  },
+  {
+    href: '/app/survey',
+    label: '설문',
+    icon: ClipboardList,
+    matchPaths: ['/app/survey'],
+    exact: false,
+  },
+  {
+    href: '/app/neural-reset',
+    label: '뉴럴리셋',
+    icon: Brain,
+    matchPaths: ['/app/neural-reset', '/app/breathing', '/app/music', '/app/journal', '/app/neural-reset/checkin', '/app/neural-reset/breathing', '/app/neural-reset/music', '/app/neural-reset/journal', '/app/neural-reset/somatic', '/app/neural-reset/badges', '/app/neural-reset/sos', '/app/neural-reset/report', '/app/neural-reset/program', '/app/neural-reset/settings'],
+    exact: false,
+  },
+  {
+    href: '/app/health-info',
+    label: '건강정보',
+    icon: Heart,
+    matchPaths: ['/app/health-info'],
+    exact: false,
+  },
+  {
+    href: '/app/mypage',
+    label: '마이',
+    icon: User,
+    matchPaths: ['/app/mypage', '/app/contact', '/app/onboarding'],
+    exact: false,
+  },
 ] as const
 
-export default function AppNav({ needsOnboarding }: AppNavProps) {
+export default function AppNav() {
   const pathname = usePathname()
-  const router = useRouter()
-
-  async function handleSignOut() {
-    const supabase = createClient()
-    await supabase.auth.signOut()
-    router.push('/')
-    router.refresh()
-  }
 
   return (
     <>
       {/* 상단 헤더 */}
       <header className="sticky top-0 z-40 border-b bg-card/95 backdrop-blur-xl">
-        <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
+        <div className="max-w-2xl mx-auto px-4 h-14 flex items-center">
           <Link href="/app" className="flex items-center">
             <img
               src="/logo-horizontal.png"
@@ -43,24 +57,6 @@ export default function AppNav({ needsOnboarding }: AppNavProps) {
               className="h-8 w-auto object-contain"
             />
           </Link>
-          <div className="flex items-center gap-2">
-            {needsOnboarding && (
-              <Link href="/app/onboarding">
-                <Badge variant="secondary" className="bg-brand-gold-light text-accent cursor-pointer">
-                  프로필 완성하기
-                </Badge>
-              </Link>
-            )}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleSignOut}
-              className="text-muted-foreground gap-1.5"
-            >
-              <LogOut className="h-4 w-4" />
-              로그아웃
-            </Button>
-          </div>
         </div>
       </header>
 
@@ -73,7 +69,9 @@ export default function AppNav({ needsOnboarding }: AppNavProps) {
           {NAV_ITEMS.map((item) => {
             const isActive = item.exact
               ? pathname === item.href
-              : pathname === item.href || pathname.startsWith(item.href + '/')
+              : item.matchPaths.some(
+                  (p) => pathname === p || pathname.startsWith(p + '/')
+                )
             const Icon = item.icon
 
             return (
@@ -97,9 +95,6 @@ export default function AppNav({ needsOnboarding }: AppNavProps) {
           })}
         </div>
       </nav>
-
-      {/* 하단 탭 높이 패딩 */}
-      <div className="h-16 safe-area-bottom" aria-hidden="true" />
     </>
   )
 }

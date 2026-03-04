@@ -49,11 +49,11 @@ export interface SurveyResponse {
 export interface AnonymousAssessment {
   id: string
   session_id: string
-  survey_type: 'compass31'
-  responses: Record<string, number>
+  survey_type: 'compass31' | 'stress_check'
+  responses: Record<string, number | string | string[] | boolean>
   total_score: number | null
   domain_scores: Record<string, number> | null
-  severity_level: AssessmentSeverity | null
+  severity_level: AssessmentSeverity | StressCheckSeverity | null
   converted_to_member: boolean
   created_at: string
 }
@@ -145,6 +145,50 @@ export interface Compass31Result {
 }
 
 // ============================================================
+// COMPASS-31 설문 시스템 (spec 기반)
+// ============================================================
+
+export interface SurveyQuestion {
+  id: string
+  text: string
+  type: 'single' | 'multiple' | 'scale' | 'text' | 'slider' | 'timeRange'
+  options?: string[]
+  optionScores?: number[]
+  domain?: string
+  showIf?: {
+    questionId: string
+    equals?: string
+    notEquals?: string
+  }
+  scaleMin?: number
+  scaleMax?: number
+  scaleLabels?: { min: string; max: string }
+  sliderUnit?: string
+  timeRangeLabels?: { start: string; end: string }
+  required: boolean
+}
+
+export interface ScoringRule {
+  minScore: number
+  maxScore: number
+  severity: 'minimal' | 'mild' | 'moderate' | 'severe'
+  interpretation: string
+}
+
+export interface Survey {
+  id: string
+  title: string
+  description: string
+  questions: SurveyQuestion[]
+  scoringRules?: ScoringRule[]
+  scoringType?: 'simple' | 'weighted'
+  domainWeights?: Record<string, number>
+  repeatable?: boolean
+}
+
+export type SurveyAnswers = Record<string, string | string[] | number>
+
+// ============================================================
 // 감사일기
 // ============================================================
 
@@ -152,6 +196,9 @@ export interface JournalEntry {
   id: string
   user_id: string
   content: string
+  mood: number | null
+  prompt_category: string | null
+  prompt_text: string | null
   created_at: string
   updated_at: string
 }
@@ -244,4 +291,155 @@ export interface MusicTrack {
   sort_order: number
   is_active: boolean
   created_at: string
+}
+
+// ============================================================
+// 스트레스 자가체크 (Stress Check)
+// ============================================================
+
+export interface StressCheckItem {
+  id: string
+  text: string
+}
+
+export interface StressCheckCategory {
+  id: string
+  name: string
+  icon: string
+  description: string
+  items: StressCheckItem[]
+  weight: number
+}
+
+export interface StressCheckLifestyleQuestion {
+  id: string
+  text: string
+  type: 'slider' | 'single'
+  options?: string[]
+  sliderMin?: number
+  sliderMax?: number
+  sliderUnit?: string
+}
+
+export type StressCheckSeverity = 'normal' | 'caution' | 'attention' | 'consult'
+
+export interface StressCheckCategoryScore {
+  categoryId: string
+  categoryName: string
+  checked: number
+  total: number
+  percentage: number
+  weightedScore: number
+}
+
+export interface StressCheckScoreResult {
+  categoryScores: StressCheckCategoryScore[]
+  overallScore: number
+  severity: StressCheckSeverity
+  severityLabel: string
+  topConcerns: string[]
+  lifestyleData: Record<string, string | number>
+}
+
+// ============================================================
+// 뉴럴리셋 (Neural Reset)
+// ============================================================
+
+export type ResetActivityType = 'breathing' | 'somatic' | 'meditation' | 'journal' | 'sos'
+
+export interface DailyCheckin {
+  id: string
+  user_id: string
+  check_date: string
+  body_score: number
+  mood_score: number
+  energy_score: number
+  stress_score: number
+  symptoms: string[]
+  created_at: string
+}
+
+export interface ResetSession {
+  id: string
+  user_id: string
+  activity_type: ResetActivityType
+  activity_detail: Record<string, string | number | boolean>
+  duration_sec: number | null
+  pre_distress: number | null
+  post_distress: number | null
+  completed: boolean
+  created_at: string
+}
+
+export interface UserStreak {
+  id: string
+  user_id: string
+  current_streak: number
+  longest_streak: number
+  last_active_date: string | null
+  freeze_available: boolean
+  freeze_used_at: string | null
+  updated_at: string
+}
+
+export interface UserBadge {
+  id: string
+  user_id: string
+  badge_id: string
+  earned_at: string
+}
+
+export interface BadgeDefinition {
+  id: string
+  name: string
+  description: string
+  icon: string
+  condition: string
+}
+
+export interface BreathingPattern {
+  id: string
+  name: string
+  description: string
+  purpose: string
+  inhale: number
+  hold1: number
+  exhale: number
+  hold2: number
+  defaultCycles: number
+}
+
+export type CheckinSeverity = 'good' | 'normal' | 'caution' | 'crisis'
+
+export interface CheckinRecommendation {
+  activityType: ResetActivityType
+  title: string
+  description: string
+  route: string
+  duration: string
+}
+
+export interface SomaticExercise {
+  id: string
+  name: string
+  description: string
+  duration: string
+  durationSec: number
+  effect: string
+  difficulty: '쉬움' | '보통'
+  icon: string
+  tags: string[]
+  steps: SomaticExerciseStep[]
+}
+
+export interface SomaticExerciseStep {
+  instruction: string
+  durationSec: number
+}
+
+export type JournalPromptCategory = 'gratitude' | 'achievement' | 'relationship' | 'nature' | 'selfcare'
+
+export interface JournalPrompt {
+  text: string
+  category: JournalPromptCategory
 }

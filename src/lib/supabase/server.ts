@@ -14,9 +14,16 @@ export async function createClient() {
         },
         setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
           try {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            )
+            const persistSession = cookieStore.get('persist_session')?.value === 'true'
+            cookiesToSet.forEach(({ name, value, options }) => {
+              if (persistSession) {
+                cookieStore.set(name, value, options)
+              } else {
+                // maxAge/expires 제거 → 세션 쿠키 (브라우저 종료 시 삭제)
+                const { maxAge, expires, ...sessionOptions } = options as CookieOptions & { maxAge?: number; expires?: Date }
+                cookieStore.set(name, value, sessionOptions)
+              }
+            })
           } catch {
             // Server Component에서 호출 시 무시 (미들웨어가 세션 갱신 처리)
           }

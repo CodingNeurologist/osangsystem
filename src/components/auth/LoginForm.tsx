@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Checkbox } from '@/components/ui/checkbox'
 
 const loginSchema = z.object({
   email: z.string().email('올바른 이메일 주소를 입력해 주세요.'),
@@ -27,6 +28,7 @@ export default function LoginForm() {
   const [serverError, setServerError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [keepLoggedIn, setKeepLoggedIn] = useState(false)
 
   const {
     register,
@@ -56,11 +58,27 @@ export default function LoginForm() {
       return
     }
 
+    // 로그인 유지 플래그를 쿠키에 저장
+    if (keepLoggedIn) {
+      document.cookie = 'persist_session=true; path=/; max-age=31536000; SameSite=Strict'
+    } else {
+      document.cookie = 'persist_session=; path=/; max-age=0'
+    }
+
     router.push(redirectTo as '/app')
     router.refresh()
   }
 
+  function setPersistCookie() {
+    if (keepLoggedIn) {
+      document.cookie = 'persist_session=true; path=/; max-age=31536000; SameSite=Strict'
+    } else {
+      document.cookie = 'persist_session=; path=/; max-age=0'
+    }
+  }
+
   async function signInWithKakao() {
+    setPersistCookie()
     const supabase = createClient()
     await supabase.auth.signInWithOAuth({
       provider: 'kakao',
@@ -71,6 +89,7 @@ export default function LoginForm() {
   }
 
   async function signInWithGoogle() {
+    setPersistCookie()
     const supabase = createClient()
     await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -154,6 +173,17 @@ export default function LoginForm() {
               {errors.password.message}
             </p>
           )}
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id="keep-logged-in"
+            checked={keepLoggedIn}
+            onCheckedChange={(checked) => setKeepLoggedIn(checked === true)}
+          />
+          <Label htmlFor="keep-logged-in" className="text-sm text-muted-foreground font-normal cursor-pointer">
+            로그인 유지
+          </Label>
         </div>
 
         {serverError && (

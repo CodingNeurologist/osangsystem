@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "additionalDirectories": [
+      "c:\\Dev\\osangcare\\src\\app\\app"
+    ],
+    "allow": [
+      "Bash(taskkill //PID 59376 //F)"
+    ]
+  }
+}

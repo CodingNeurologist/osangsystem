@@ -54,6 +54,9 @@ self.addEventListener('fetch', (event) => {
   // 같은 오리진만 처리
   if (url.origin !== location.origin) return
 
+  // POST 등 GET 이외 메서드는 캐시 불가 — 네트워크 직접 전달
+  if (request.method !== 'GET') return
+
   // API 요청: Network First
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(networkFirst(request))

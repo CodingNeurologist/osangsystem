@@ -24,13 +24,14 @@ export function useContentAssignments(patientId?: string) {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { setIsLoading(false); return }
 
-      const { data: patient } = await supabase
+      const { data: patient, error: patientError } = await supabase
         .from('patients')
         .select('id')
         .eq('user_id', user.id)
         .single()
 
-      if (!patient) { setIsLoading(false); return }
+      // patients 테이블이 아직 없는 경우 조용히 종료
+      if (patientError || !patient) { setIsLoading(false); return }
       pid = patient.id
     }
 

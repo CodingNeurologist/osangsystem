@@ -1,8 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import type { Metadata } from 'next'
-import { TrendingUp, BookOpen, Wind, Music, Building2, ChevronRight } from 'lucide-react'
+import { TrendingUp, BookOpen, Wind, Music, Building2, Phone, ChevronRight, Activity, UserCircle } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 
 export const metadata: Metadata = {
@@ -40,13 +39,36 @@ export default async function AppHomePage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  if (!user) redirect('/login')
+  // layout.tsx에서 이미 인증 체크 후 리다이렉트하므로 user는 항상 존재
+  let { data: profile } = user
+    ? await supabase
+        .from('profiles')
+        .select('gender, birth_date, primary_symptoms, privacy_consent_at')
+        .eq('id', user.id)
+        .single()
+    : { data: null }
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('gender, birth_date, primary_symptoms, privacy_consent_at')
-    .eq('id', user.id)
-    .single()
+  // 회원가입 시 메타데이터에 저장된 프로필 정보를 profiles 테이블로 동기화
+  // (이메일 인증 후 첫 로그인 시 세션이 없어서 update가 안 된 경우)
+  if (user && profile && !profile.gender) {
+    const meta = user.user_metadata
+    if (meta?.gender && meta?.birth_date && meta?.primary_symptoms?.length) {
+      const { data: synced } = await supabase
+        .from('profiles')
+        .update({
+          gender: meta.gender,
+          birth_date: meta.birth_date,
+          primary_symptoms: meta.primary_symptoms,
+          privacy_consent_at: new Date().toISOString(),
+          privacy_consent_version: meta.privacy_consent_version ?? '1.0',
+        })
+        .eq('id', user.id)
+        .select('gender, birth_date, primary_symptoms, privacy_consent_at')
+        .single()
+
+      if (synced) profile = synced
+    }
+  }
 
   const needsOnboarding =
     !profile?.gender ||
@@ -54,12 +76,29 @@ export default async function AppHomePage() {
     !profile?.primary_symptoms?.length ||
     !profile?.privacy_consent_at
 
-  if (needsOnboarding) {
-    redirect('/app/onboarding')
-  }
-
   return (
     <div className="space-y-6 slide-up">
+      {/* 프로필 미완성 안내 배너 */}
+      {needsOnboarding && (
+        <Link
+          href="/app/onboarding"
+          className="flex items-center justify-between p-4 rounded-xl border border-amber-200 bg-amber-50 transition-colors duration-150 hover:bg-amber-100"
+        >
+          <div className="flex items-center gap-3">
+            <span className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-amber-100 text-amber-600">
+              <UserCircle className="h-5 w-5" />
+            </span>
+            <div>
+              <p className="font-semibold text-sm text-foreground">기본 정보를 입력해 주세요</p>
+              <p className="text-xs text-muted-foreground">
+                맞춤 서비스를 위해 간단한 정보가 필요합니다
+              </p>
+            </div>
+          </div>
+          <ChevronRight className="h-5 w-5 text-muted-foreground" />
+        </Link>
+      )}
+
       {/* 인사말 */}
       <div className="pt-2">
         <p className="text-sm text-muted-foreground">안녕하세요</p>
@@ -113,24 +152,62 @@ export default async function AppHomePage() {
         </div>
       </div>
 
-      {/* 치료 안내 */}
+      {/* 정밀 자율신경 검사 CTA */}
       <Link
-        href="/app/treatment"
-        className="flex items-center justify-between p-4 rounded-xl border border-border transition-colors duration-150 hover:bg-zinc-50"
+        href="/app/compass31"
+        className="flex items-center justify-between p-4 rounded-xl border border-primary/20 bg-primary/5 transition-colors duration-150 hover:bg-primary/10"
       >
         <div className="flex items-center gap-3">
-          <span className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-secondary text-primary">
-            <Building2 className="h-5 w-5" />
+          <span className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-primary/10 text-primary">
+            <Activity className="h-5 w-5" />
           </span>
           <div>
-            <p className="font-semibold text-sm text-foreground">치료 안내</p>
+            <p className="font-semibold text-sm text-foreground">정밀 자율신경 검사</p>
             <p className="text-xs text-muted-foreground">
-              자율신경실조증 치료 정보
+              COMPASS-31 기반 정밀 평가
             </p>
           </div>
         </div>
         <ChevronRight className="h-5 w-5 text-muted-foreground" />
       </Link>
+
+      {/* 병원 안내 */}
+      <div className="space-y-3">
+        <Link
+          href="/app/contact"
+          className="flex items-center justify-between p-4 rounded-xl border border-border transition-colors duration-150 hover:bg-zinc-50"
+        >
+          <div className="flex items-center gap-3">
+            <span className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-600">
+              <Phone className="h-5 w-5" />
+            </span>
+            <div>
+              <p className="font-semibold text-sm text-foreground">병원 연락처</p>
+              <p className="text-xs text-muted-foreground">
+                전화, 카카오톡, SNS로 문의하기
+              </p>
+            </div>
+          </div>
+          <ChevronRight className="h-5 w-5 text-muted-foreground" />
+        </Link>
+        <Link
+          href="/app/treatment"
+          className="flex items-center justify-between p-4 rounded-xl border border-border transition-colors duration-150 hover:bg-zinc-50"
+        >
+          <div className="flex items-center gap-3">
+            <span className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-secondary text-primary">
+              <Building2 className="h-5 w-5" />
+            </span>
+            <div>
+              <p className="font-semibold text-sm text-foreground">치료 안내</p>
+              <p className="text-xs text-muted-foreground">
+                자율신경실조증 치료 정보
+              </p>
+            </div>
+          </div>
+          <ChevronRight className="h-5 w-5 text-muted-foreground" />
+        </Link>
+      </div>
     </div>
   )
 }

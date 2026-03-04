@@ -1,0 +1,8 @@
+{ label: '전화하기', sub: '1599-5453', href: 'tel:1599-5453', icon: Phone, color: 'bg-emerald-500/10 text-emerald-600' },
+  { label: '카카오톡 상담', sub: '카카오채널', href: 'https://pf.kakao.com/_pxlsPs/chat', icon: MessageCircle, color: 'bg-yellow-500/10 text-yellow-600' },
+  { label: '줄기세포 상담', sub: '010-4559-5453', href: 'tel:010-4559-5453', icon: Phone, color: 'bg-blue-500/10 text-blue-600' },
+  { label: '홈페이지', sub: 'osns.co.kr', href: 'https://osns.co.kr', icon: Globe, color: 'bg-primary/10 text-primary' },
+  { label: '블로그', sub: 'Naver Blog', href: 'https://blog.naver.com/osns_', icon: BookOpen, color: 'bg-green-500/10 text-green-600' },
+  { label: '인스타그램', sub: '@osangns_', href: 'https://instagram.com/osangns_', icon: Instagram, color: 'bg-pink-500/10 text-pink-600' },
+  { label: '오시는 길', sub: '네이버 지도', href: 'https://naver.me/FMAynKMZ', icon: MapPin, color: 'bg-red-500/10 text-red-600' },
+  { label: '유튜브', sub: '@오상병원', href: 'https://www.youtube.com/@오상병원', icon: Youtube, color: 'bg-red-600/10 text-red-600' },

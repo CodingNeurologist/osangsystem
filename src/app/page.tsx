@@ -35,7 +35,7 @@ export default async function HomePage() {
         {/* CTA 버튼 */}
         <div className="space-y-3">
           <Button asChild size="lg" className="w-full text-base py-6">
-            <Link href="/check">자율신경실조증 자가진단</Link>
+            <Link href="/check">자율신경 스트레스 자가체크</Link>
           </Button>
           <p className="text-xs text-muted-foreground">
             회원가입 없이 무료로 이용하실 수 있습니다

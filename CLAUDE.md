@@ -317,6 +317,10 @@ Task 도구 사용 → 해당 AGENT.md 파일 내용을 prompt로 전달 → 결
 
 Linear, Vercel Dashboard, Notion 스타일 지향 — 깔끔하고 여백이 넉넉한 미니멀 디자인.
 
+### 상세 프론트엔드 지침
+
+전체 UI/UX 디자인 시스템, 컬러 토큰, 컴포넌트 패턴, 페이지별 UX 가이드, 한국 UX 모범 사례, 리텐션 전략: `docs/frontend-guide.md` 참조.
+
 ---
 
 ## 절대 준수 규칙 (위반 시 즉시 에스컬레이션)

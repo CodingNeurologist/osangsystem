@@ -1,194 +1,361 @@
 'use client'
 
-import { useState, useCallback } from 'react'
-import compass31Data from '@/data/questionnaire-compass31.json'
-import type { Questionnaire, Compass31Result } from '@/types'
-import { calcCompass31Score } from '@/lib/scoring'
+import { useState, useCallback, useRef, useEffect } from 'react'
+import { COMPASS31_SURVEY } from '@/data/compass31'
+import type { SurveyAnswers, SurveyQuestion } from '@/types'
+import type { WeightedScoreResult } from '@/utils/surveyScoring'
+import { getVisibleQuestions, calculateSurveyScore } from '@/utils/surveyScoring'
 import Compass31ResultView from './Compass31Result'
 import { Card, CardContent } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import { ChevronLeft, ChevronRight, Check } from 'lucide-react'
 
-const questionnaire = compass31Data as unknown as Questionnaire
-
-// 도메인별로 문항 그룹화
-const DOMAIN_GROUPS = [
-  { id: 'oi', label: '기립성 저혈압 증상', description: '누워 있다가 일어날 때 나타나는 증상' },
-  { id: 'vm', label: '혈관운동 증상', description: '피부 색상 변화 및 홍조 관련 증상' },
-  { id: 'sm', label: '분비 기능 증상', description: '땀, 구강·눈 건조 등 분비 관련 증상' },
-  { id: 'gi', label: '위장관 증상', description: '소화, 식욕, 배변 관련 증상' },
-  { id: 'bl', label: '방광 증상', description: '소변 관련 증상' },
-  { id: 'pm', label: '동공 및 시각 증상', description: '빛 적응, 시력 관련 증상' },
-]
+const AUTO_ADVANCE_DELAY = 300
 
 export default function Compass31Survey() {
-  const [responses, setResponses] = useState<Record<string, number>>({})
-  const [currentDomainIndex, setCurrentDomainIndex] = useState(0)
-  const [result, setResult] = useState<Compass31Result | null>(null)
+  const survey = COMPASS31_SURVEY
+  const [answers, setAnswers] = useState<SurveyAnswers>({})
+  const [currentIndex, setCurrentIndex] = useState(0)
+  const [result, setResult] = useState<WeightedScoreResult | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [startTime] = useState(() => Date.now())
+  const autoAdvanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const currentDomain = DOMAIN_GROUPS[currentDomainIndex]
-  const domainItems = questionnaire.items.filter(
-    (item) => item.domain === currentDomain.id
-  )
-  const totalDomains = DOMAIN_GROUPS.length
+  // 현재 visible 문항 목록
+  const visibleQuestions = getVisibleQuestions(survey.questions, answers)
+  const totalVisible = visibleQuestions.length
+  const currentQuestion = visibleQuestions[currentIndex]
 
-  const answeredInCurrentDomain = domainItems.every(
-    (item) => responses[item.id] !== undefined
-  )
+  // 진행률
+  const answeredCount = visibleQuestions.filter(
+    (q) => answers[q.id] !== undefined && answers[q.id] !== '' &&
+      !(Array.isArray(answers[q.id]) && (answers[q.id] as string[]).length === 0)
+  ).length
+  const progressPercent = totalVisible > 0 ? Math.round((answeredCount / totalVisible) * 100) : 0
 
-  const totalItems = questionnaire.items.length
-  const answeredTotal = Object.keys(responses).length
-  const progressPercent = Math.round((answeredTotal / totalItems) * 100)
+  const isLastQuestion = currentIndex === totalVisible - 1
 
-  const handleAnswer = useCallback((itemId: string, value: number) => {
-    setResponses((prev) => ({ ...prev, [itemId]: value }))
+  // gate 문항 변경 시 currentIndex 보정
+  useEffect(() => {
+    if (currentIndex >= totalVisible && totalVisible > 0) {
+      setCurrentIndex(totalVisible - 1)
+    }
+  }, [currentIndex, totalVisible])
+
+  // cleanup auto-advance timer
+  useEffect(() => {
+    return () => {
+      if (autoAdvanceTimer.current) clearTimeout(autoAdvanceTimer.current)
+    }
   }, [])
 
-  function handleNext() {
-    if (currentDomainIndex < totalDomains - 1) {
-      setCurrentDomainIndex((i) => i + 1)
+  // single 선택 핸들러 — 자동 진행
+  const handleSingleSelect = useCallback(
+    (questionId: string, value: string) => {
+      setAnswers((prev) => ({ ...prev, [questionId]: value }))
+
+      if (autoAdvanceTimer.current) clearTimeout(autoAdvanceTimer.current)
+
+      autoAdvanceTimer.current = setTimeout(() => {
+        // 답변 설정 후 visible 재계산하여 마지막인지 확인
+        setAnswers((latestAnswers) => {
+          const updated = { ...latestAnswers, [questionId]: value }
+          const updatedVisible = getVisibleQuestions(survey.questions, updated)
+          const updatedIdx = updatedVisible.findIndex((q) => q.id === questionId)
+          const updatedIsLast = updatedIdx === updatedVisible.length - 1
+
+          if (updatedIsLast) {
+            // 마지막 문항이면 자동 제출
+            submitSurvey(updated)
+          } else {
+            // 다음 문항으로 이동
+            setCurrentIndex((prev) => {
+              const nextIdx = updatedVisible.findIndex((q) => q.id === questionId)
+              return nextIdx >= 0 ? nextIdx + 1 : prev + 1
+            })
+          }
+          return updated
+        })
+      }, AUTO_ADVANCE_DELAY)
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [survey.questions]
+  )
+
+  // multiple 선택 토글 핸들러
+  const handleMultipleToggle = useCallback(
+    (questionId: string, option: string) => {
+      setAnswers((prev) => {
+        const current = (prev[questionId] as string[] | undefined) ?? []
+        const next = current.includes(option)
+          ? current.filter((v) => v !== option)
+          : [...current, option]
+        return { ...prev, [questionId]: next }
+      })
+    },
+    []
+  )
+
+  // 네비게이션
+  function goNext() {
+    if (currentIndex < totalVisible - 1) {
+      setCurrentIndex((i) => i + 1)
       window.scrollTo({ top: 0, behavior: 'smooth' })
     }
   }
 
-  function handlePrev() {
-    if (currentDomainIndex > 0) {
-      setCurrentDomainIndex((i) => i - 1)
+  function goPrev() {
+    if (currentIndex > 0) {
+      setCurrentIndex((i) => i - 1)
       window.scrollTo({ top: 0, behavior: 'smooth' })
     }
   }
 
-  async function handleSubmit() {
-    const allAnswered = questionnaire.items.every(
-      (item) => responses[item.id] !== undefined
-    )
+  // 제출
+  async function submitSurvey(finalAnswers?: SurveyAnswers) {
+    const answersToScore = finalAnswers ?? answers
+    const allVisible = getVisibleQuestions(survey.questions, answersToScore)
+    const allAnswered = allVisible.every((q) => {
+      const a = answersToScore[q.id]
+      if (a === undefined || a === null || a === '') return false
+      if (Array.isArray(a) && a.length === 0) return false
+      return true
+    })
     if (!allAnswered) return
 
     setIsSubmitting(true)
+    const calcResult = calculateSurveyScore(survey, answersToScore)
+    const duration = Math.round((Date.now() - startTime) / 1000)
+    const roundedTotal = Math.round(calcResult.totalScore)
 
-    const calcResult = calcCompass31Score(responses, questionnaire)
-    setResult(calcResult)
-
-    // 익명 응답 저장 (세션 기반)
+    // 익명 응답 저장
     try {
       await fetch('/api/check/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          responses,
-          total_score: calcResult.total_score,
-          domain_scores: calcResult.domain_scores,
-          severity_level: calcResult.severity_level,
+          responses: answersToScore,
+          total_score: roundedTotal,
+          domain_scores: calcResult.domainScores,
+          severity_level: calcResult.severity ?? 'minimal',
+          duration,
         }),
       })
     } catch {
-      // 저장 실패해도 결과는 표시
+      // 저장 실패해도 결과 표시
     }
 
+    setResult(calcResult)
     setIsSubmitting(false)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
+  // 결과 화면
   if (result) {
-    return <Compass31ResultView result={result} questionnaire={questionnaire} />
+    return <Compass31ResultView result={result} />
   }
 
+  // 로딩 방어
+  if (!currentQuestion) {
+    return null
+  }
+
+  // 현재 문항 답변 여부
+  const currentAnswer = answers[currentQuestion.id]
+  const isCurrentAnswered = (() => {
+    if (currentAnswer === undefined || currentAnswer === null || currentAnswer === '') return false
+    if (Array.isArray(currentAnswer) && currentAnswer.length === 0) return false
+    return true
+  })()
+
+  // 문항 번호 (원래 31문항 기준)
+  const questionNumber = survey.questions.findIndex((q) => q.id === currentQuestion.id) + 1
+
   return (
-    <div className="max-w-2xl mx-auto px-4 py-8">
-      {/* 진행률 */}
+    <div className="max-w-screen-md mx-auto px-4 py-6">
+      {/* 상단 진행률 바 */}
       <div className="mb-6">
-        <div className="flex justify-between text-sm text-zinc-600 mb-2">
+        <div className="flex justify-between text-xs text-zinc-500 mb-2">
           <span>
-            {currentDomainIndex + 1} / {totalDomains} 영역
+            {currentIndex + 1} / {totalVisible} 문항
           </span>
           <span>{progressPercent}% 완료</span>
         </div>
         <Progress value={progressPercent} className="h-2" />
       </div>
 
-      {/* 도메인 헤더 */}
-      <div className="mb-6">
-        <h2 className="text-xl font-semibold text-zinc-900">{currentDomain.label}</h2>
-        <p className="text-sm text-zinc-500 mt-1">{currentDomain.description}</p>
-      </div>
+      {/* 문항 카드 */}
+      <Card className="rounded-xl shadow-sm border border-zinc-100 bg-white">
+        <CardContent className="pt-6 pb-6">
+          <p className="text-sm text-zinc-500 mb-2">Q{questionNumber}</p>
+          <p className="text-base font-medium text-zinc-900 leading-relaxed mb-6">
+            {currentQuestion.text}
+          </p>
 
-      {/* 문항 목록 */}
-      <div className="space-y-6">
-        {domainItems.map((item) => (
-          <Card key={item.id}>
-            <CardContent className="pt-6">
-              <p className="text-sm font-medium text-zinc-800 mb-4">
-                <span className="text-primary font-bold mr-2">{item.number}.</span>
-                {item.text}
-              </p>
-              <div className="space-y-2">
-                {item.options.map((option) => {
-                  const isSelected = responses[item.id] === option.value
-                  return (
-                    <label
-                      key={option.value}
-                      className={`flex items-center gap-3 px-4 py-3 rounded-lg border cursor-pointer transition-colors ${
-                        isSelected
-                          ? 'border-primary bg-primary/5 text-zinc-900'
-                          : 'border-zinc-200 hover:bg-zinc-50 text-zinc-700'
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name={item.id}
-                        value={option.value}
-                        checked={isSelected}
-                        onChange={() => handleAnswer(item.id, option.value)}
-                        className="w-4 h-4 text-primary focus:ring-primary"
-                      />
-                      <span className="text-sm">{option.text}</span>
-                    </label>
-                  )
-                })}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+          {/* single 타입 */}
+          {currentQuestion.type === 'single' && (
+            <SingleChoiceOptions
+              question={currentQuestion}
+              value={currentAnswer as string | undefined}
+              onSelect={(v) => handleSingleSelect(currentQuestion.id, v)}
+            />
+          )}
 
-      {/* 네비게이션 버튼 */}
-      <div className="flex gap-3 mt-8">
-        {currentDomainIndex > 0 && (
-          <Button
-            variant="outline"
-            type="button"
-            onClick={handlePrev}
-            className="flex-1"
-          >
-            이전
-          </Button>
-        )}
+          {/* multiple 타입 */}
+          {currentQuestion.type === 'multiple' && (
+            <MultipleChoiceOptions
+              question={currentQuestion}
+              value={(currentAnswer as string[] | undefined) ?? []}
+              onToggle={(v) => handleMultipleToggle(currentQuestion.id, v)}
+            />
+          )}
+        </CardContent>
+      </Card>
 
-        {currentDomainIndex < totalDomains - 1 ? (
-          <Button
-            type="button"
-            onClick={handleNext}
-            disabled={!answeredInCurrentDomain}
-            className="flex-1"
-          >
-            다음 영역
-          </Button>
+      {/* 하단 네비게이션 Footer */}
+      <div className="flex gap-3 mt-6">
+        <Button
+          variant="outline"
+          onClick={goPrev}
+          disabled={currentIndex === 0}
+          className="flex-1"
+          size="lg"
+        >
+          <ChevronLeft className="h-4 w-4 mr-1" />
+          이전
+        </Button>
+
+        {currentQuestion.type === 'multiple' || !isCurrentAnswered ? (
+          isLastQuestion ? (
+            <Button
+              onClick={() => submitSurvey()}
+              disabled={!isCurrentAnswered || isSubmitting}
+              className="flex-1"
+              size="lg"
+            >
+              {isSubmitting ? '계산 중...' : '결과 확인하기'}
+            </Button>
+          ) : (
+            <Button
+              onClick={goNext}
+              disabled={!isCurrentAnswered}
+              className="flex-1"
+              size="lg"
+            >
+              다음
+              <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          )
         ) : (
-          <Button
-            type="button"
-            onClick={handleSubmit}
-            disabled={!answeredInCurrentDomain || isSubmitting}
-            className="flex-1"
-          >
-            {isSubmitting ? '결과 계산 중...' : '결과 확인하기'}
-          </Button>
+          // single 타입은 자동진행이므로 수동 다음 버튼도 표시
+          isLastQuestion ? (
+            <Button
+              onClick={() => submitSurvey()}
+              disabled={!isCurrentAnswered || isSubmitting}
+              className="flex-1"
+              size="lg"
+            >
+              {isSubmitting ? '계산 중...' : '결과 확인하기'}
+            </Button>
+          ) : (
+            <Button
+              onClick={goNext}
+              disabled={!isCurrentAnswered}
+              className="flex-1"
+              size="lg"
+            >
+              다음
+              <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          )
         )}
       </div>
 
+      {/* 면책 문구 */}
       <p className="text-xs text-center text-muted-foreground mt-4">
-        {questionnaire.footer_disclaimer}
+        이 결과는 참고용 자가점검 도구이며, 의사의 진단이나 치료를 대체하지 않습니다.
       </p>
+    </div>
+  )
+}
+
+// ============================================================
+// SingleChoiceOptions 서브 컴포넌트
+// ============================================================
+function SingleChoiceOptions({
+  question,
+  value,
+  onSelect,
+}: {
+  question: SurveyQuestion
+  value: string | undefined
+  onSelect: (v: string) => void
+}) {
+  return (
+    <div className="space-y-2">
+      {question.options?.map((option) => {
+        const isSelected = value === option
+        return (
+          <button
+            key={option}
+            type="button"
+            onClick={() => onSelect(option)}
+            className={`flex items-center w-full gap-3 px-4 py-3 rounded-lg border text-left transition-colors min-h-[44px] ${
+              isSelected
+                ? 'border-primary bg-primary/5 text-zinc-900'
+                : 'border-zinc-200 hover:bg-zinc-50 text-zinc-700'
+            }`}
+          >
+            <div
+              className={`flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
+                isSelected ? 'border-primary bg-primary' : 'border-zinc-300'
+              }`}
+            >
+              {isSelected && <Check className="h-3 w-3 text-white" />}
+            </div>
+            <span className="text-sm">{option}</span>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+// ============================================================
+// MultipleChoiceOptions 서브 컴포넌트
+// ============================================================
+function MultipleChoiceOptions({
+  question,
+  value,
+  onToggle,
+}: {
+  question: SurveyQuestion
+  value: string[]
+  onToggle: (v: string) => void
+}) {
+  return (
+    <div className="space-y-2">
+      {question.options?.map((option) => {
+        const isChecked = value.includes(option)
+        return (
+          <button
+            key={option}
+            type="button"
+            onClick={() => onToggle(option)}
+            className={`flex items-center w-full gap-3 px-4 py-3 rounded-lg border text-left transition-colors min-h-[44px] ${
+              isChecked
+                ? 'border-primary bg-primary/5 text-zinc-900'
+                : 'border-zinc-200 hover:bg-zinc-50 text-zinc-700'
+            }`}
+          >
+            <Checkbox checked={isChecked} className="pointer-events-none" />
+            <span className="text-sm">{option}</span>
+          </button>
+        )
+      })}
+      <p className="text-xs text-zinc-400 mt-1">복수 선택 가능</p>
     </div>
   )
 }

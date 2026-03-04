@@ -2,8 +2,13 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 
 export const metadata: Metadata = {
-  title: '자율신경실조증 자가진단',
-  description: 'COMPASS-31 기반 자율신경실조증 자가진단 설문입니다. 6개 도메인 31개 문항으로 구성되어 있습니다.',
+  title: '자율신경 스트레스 자가체크 — 무료 자가진단',
+  description: '수면, 기분, 뇌기능, 순환기, 소화기 등 8개 영역의 자율신경 관련 증상을 간편하게 점검해보세요. 회원가입 없이 약 3-5분이면 완료됩니다.',
+  openGraph: {
+    title: '자율신경 스트레스 자가체크 — 오상케어',
+    description: '8개 영역 58개 항목으로 자율신경 상태를 체크하세요. 무료, 3-5분 소요.',
+    images: [{ url: '/og-image.png', width: 1200, height: 630, alt: '오상케어 자가체크' }],
+  },
 }
 
 export default function CheckLayout({

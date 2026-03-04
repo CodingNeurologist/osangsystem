@@ -1,10 +1,10 @@
 import type { Metadata } from 'next'
-import Compass31Survey from '@/components/survey/Compass31Survey'
+import StressCheckSurvey from '@/components/survey/StressCheckSurvey'
 
 export const metadata: Metadata = {
-  title: '자율신경실조증 자가진단 설문',
+  title: '자율신경 스트레스 자가체크 설문',
 }
 
 export default function CheckSurveyPage() {
-  return <Compass31Survey />
+  return <StressCheckSurvey />
 }

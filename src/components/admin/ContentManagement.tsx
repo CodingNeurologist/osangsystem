@@ -15,6 +15,7 @@ import {
   Upload,
   Link as LinkIcon,
   X,
+  Loader2,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -92,6 +93,7 @@ export default function ContentManagement() {
   const [deleteDialogId, setDeleteDialogId] = useState<string | null>(null)
   const [assignContentId, setAssignContentId] = useState<string | null>(null)
   const [ytLoading, setYtLoading] = useState(false)
+  const [ytThumbnail, setYtThumbnail] = useState<string | null>(null)
 
   // 검색 필터
   const filtered = contents.filter((c) => {
@@ -112,6 +114,7 @@ export default function ContentManagement() {
       visibility: mode === 'youtube' ? 'public' : 'assigned',
     })
     setError(null)
+    setYtThumbnail(null)
   }
 
   function openEditForm(content: EducationalContent) {
@@ -130,36 +133,44 @@ export default function ContentManagement() {
       file: null,
     })
     setError(null)
+    setYtThumbnail(null)
   }
 
   async function fetchYoutubeMetadata() {
-    if (!form.youtubeUrl.trim()) return
+    const url = form.youtubeUrl.trim()
+    if (!url) return
+
+    const ytPattern = /^https?:\/\/(www\.)?(youtube\.com|youtu\.be|m\.youtube\.com)\//
+    if (!ytPattern.test(url)) {
+      setError('올바른 YouTube URL을 입력하세요.')
+      return
+    }
+
     setYtLoading(true)
+    setError(null)
     try {
-      const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/youtube-metadata`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${session?.access_token ?? ''}`,
-          },
-          body: JSON.stringify({ url: form.youtubeUrl }),
-        }
-      )
+      const res = await fetch('/api/admin/youtube-metadata', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      })
       const json = await res.json()
+      if (!res.ok) {
+        setError(json.error ?? 'YouTube 정보를 불러올 수 없습니다.')
+        setYtLoading(false)
+        return
+      }
       if (json.success && json.data) {
         setForm((f) => ({
           ...f,
           title: json.data.title || f.title,
-          body: json.data.duration || f.body,
-          summary: json.data.author ? `채널: ${json.data.author}` : f.summary,
+          summary: json.data.author || f.summary,
+          body: json.data.description || f.body,
         }))
+        setYtThumbnail(json.data.thumbnail ?? null)
       }
     } catch {
-      // 메타데이터 실패는 무시 — 수동 입력 가능
+      setError('YouTube 정보를 불러올 수 없습니다. 직접 입력해 주세요.')
     }
     setYtLoading(false)
   }
@@ -247,6 +258,7 @@ export default function ContentManagement() {
 
       setFormMode(null)
       setForm(EMPTY_FORM)
+      setYtThumbnail(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : '오류가 발생했습니다.')
     }
@@ -452,19 +464,35 @@ export default function ContentManagement() {
                   <Input
                     placeholder="https://www.youtube.com/watch?v=..."
                     value={form.youtubeUrl}
-                    onChange={(e) =>
+                    onChange={(e) => {
                       setForm((f) => ({ ...f, youtubeUrl: e.target.value }))
-                    }
+                      setYtThumbnail(null)
+                    }}
                   />
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={fetchYoutubeMetadata}
                     disabled={ytLoading}
+                    className="shrink-0"
                   >
-                    {ytLoading ? '...' : '불러오기'}
+                    {ytLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      '불러오기'
+                    )}
                   </Button>
                 </div>
+                {ytThumbnail && (
+                  <div className="rounded-lg overflow-hidden border border-zinc-200 bg-black">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={ytThumbnail}
+                      alt="YouTube 미리보기"
+                      className="w-full aspect-video object-contain"
+                    />
+                  </div>
+                )}
               </div>
             )}
 
@@ -520,10 +548,11 @@ export default function ContentManagement() {
               </div>
             )}
 
-            {/* 요약 */}
+            {/* 채널명 / 요약 */}
             <div className="space-y-2">
-              <Label>요약 설명</Label>
+              <Label>{formMode === 'youtube' ? '채널명' : '요약 설명'}</Label>
               <Input
+                placeholder={formMode === 'youtube' ? '채널명이 자동으로 입력됩니다' : ''}
                 value={form.summary}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, summary: e.target.value }))

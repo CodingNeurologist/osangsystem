@@ -1,8 +1,9 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Phone } from 'lucide-react'
+import { Phone, ChevronRight } from 'lucide-react'
 
 export const metadata: Metadata = {
   title: '치료 안내',
@@ -76,12 +77,20 @@ export default function TreatmentPage() {
           <p className="text-sm text-muted-foreground mb-3">
             증상이 걱정되신다면 전문의 상담을 받아보세요.
           </p>
-          <Button asChild className="w-full sm:w-auto">
-            <a href={`tel:${process.env.NEXT_PUBLIC_HOSPITAL_PHONE ?? ''}`}>
-              <Phone className="h-4 w-4 mr-2" />
-              전화 예약
-            </a>
-          </Button>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Button asChild className="w-full sm:w-auto">
+              <a href="tel:1599-5453">
+                <Phone className="h-4 w-4 mr-2" />
+                전화 예약 (1599-5453)
+              </a>
+            </Button>
+            <Button asChild variant="outline" className="w-full sm:w-auto">
+              <Link href="/app/contact">
+                연락처 전체 보기
+                <ChevronRight className="h-4 w-4 ml-1" />
+              </Link>
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
