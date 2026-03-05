@@ -3,24 +3,72 @@ import { updateSession } from '@/lib/supabase/middleware'
 import { createServerClient } from '@supabase/ssr'
 
 export async function middleware(request: NextRequest) {
-  const { supabaseResponse, user } = await updateSession(request)
+  try {
+    const { supabaseResponse, user } = await updateSession(request)
 
-  const pathname = request.nextUrl.pathname
+    const pathname = request.nextUrl.pathname
 
-  // /app/* 경로: 로그인 필수
-  if (pathname.startsWith('/app')) {
-    if (!user) {
-      const url = request.nextUrl.clone()
-      url.pathname = '/login'
-      url.searchParams.set('redirectTo', pathname)
-      return NextResponse.redirect(url)
+    // /app/* 경로: 로그인 필수
+    if (pathname.startsWith('/app')) {
+      if (!user) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/login'
+        url.searchParams.set('redirectTo', pathname)
+        return NextResponse.redirect(url)
+      }
+
+      // 온보딩 미완성 시 강제 리다이렉트 (온보딩 페이지 자체는 제외)
+      if (!pathname.startsWith('/app/onboarding') && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+        const supabaseService = createServerClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.SUPABASE_SERVICE_ROLE_KEY,
+          {
+            cookies: {
+              getAll() { return request.cookies.getAll() },
+              setAll() {},
+            },
+          }
+        )
+
+        const { data: profile } = await supabaseService
+          .from('profiles')
+          .select('gender, birth_date, primary_symptoms, privacy_consent_at')
+          .eq('id', user.id)
+          .single()
+
+        const needsOnboarding =
+          !profile?.gender ||
+          !profile?.birth_date ||
+          !profile?.primary_symptoms?.length ||
+          !profile?.privacy_consent_at
+
+        if (needsOnboarding) {
+          const url = request.nextUrl.clone()
+          url.pathname = '/app/onboarding'
+          return NextResponse.redirect(url)
+        }
+      }
     }
 
-    // 온보딩 미완성 시 강제 리다이렉트 (온보딩 페이지 자체는 제외)
-    if (!pathname.startsWith('/app/onboarding')) {
-      const supabaseService = createServerClient(
+    // /admin/* 경로: 관리자 권한 필수
+    if (pathname.startsWith('/admin')) {
+      if (!user) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/login'
+        url.searchParams.set('redirectTo', pathname)
+        return NextResponse.redirect(url)
+      }
+
+      if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/app'
+        return NextResponse.redirect(url)
+      }
+
+      // 역할 확인 (Supabase service role로 profiles 조회)
+      const supabase = createServerClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY,
         {
           cookies: {
             getAll() { return request.cookies.getAll() },
@@ -29,68 +77,31 @@ export async function middleware(request: NextRequest) {
         }
       )
 
-      const { data: profile } = await supabaseService
+      const { data: profile } = await supabase
         .from('profiles')
-        .select('gender, birth_date, primary_symptoms, privacy_consent_at')
+        .select('role')
         .eq('id', user.id)
         .single()
 
-      const needsOnboarding =
-        !profile?.gender ||
-        !profile?.birth_date ||
-        !profile?.primary_symptoms?.length ||
-        !profile?.privacy_consent_at
-
-      if (needsOnboarding) {
+      if (!profile || !['admin', 'super_admin'].includes(profile.role)) {
         const url = request.nextUrl.clone()
-        url.pathname = '/app/onboarding'
+        url.pathname = '/app'
         return NextResponse.redirect(url)
       }
     }
-  }
 
-  // /admin/* 경로: 관리자 권한 필수
-  if (pathname.startsWith('/admin')) {
-    if (!user) {
-      const url = request.nextUrl.clone()
-      url.pathname = '/login'
-      url.searchParams.set('redirectTo', pathname)
-      return NextResponse.redirect(url)
-    }
-
-    // 역할 확인 (Supabase service role로 profiles 조회)
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      {
-        cookies: {
-          getAll() { return request.cookies.getAll() },
-          setAll() {},
-        },
-      }
-    )
-
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile || !['admin', 'super_admin'].includes(profile.role)) {
+    // 이미 로그인된 사용자가 /login, /signup 접근 시 /app으로 리디렉션
+    if (user && (pathname === '/login' || pathname === '/signup')) {
       const url = request.nextUrl.clone()
       url.pathname = '/app'
       return NextResponse.redirect(url)
     }
-  }
 
-  // 이미 로그인된 사용자가 /login, /signup 접근 시 /app으로 리디렉션
-  if (user && (pathname === '/login' || pathname === '/signup')) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/app'
-    return NextResponse.redirect(url)
+    return supabaseResponse
+  } catch (error) {
+    console.error('Middleware error:', error)
+    return NextResponse.next()
   }
-
-  return supabaseResponse
 }
 
 export const config = {
