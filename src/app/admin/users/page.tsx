@@ -1,7 +1,5 @@
 import type { Metadata } from 'next'
-import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
 import AdminUserTable from '@/components/admin/AdminUserTable'
 
 export const metadata: Metadata = {
@@ -9,18 +7,7 @@ export const metadata: Metadata = {
 }
 
 export default async function AdminUsersPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
   const service = await createServiceClient()
-  const { data: myProfile } = await service
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  if (myProfile?.role !== 'super_admin') redirect('/admin')
 
   // 관리자 목록만 표시 (일반 사용자 개인정보 보호)
   const { data: admins } = await service
@@ -37,7 +24,7 @@ export default async function AdminUsersPage() {
           관리자 권한을 가진 계정을 관리합니다. 일반 사용자 정보는 표시되지 않습니다.
         </p>
       </div>
-      <AdminUserTable admins={admins ?? []} currentUserId={user.id} />
+      <AdminUserTable admins={admins ?? []} />
     </div>
   )
 }

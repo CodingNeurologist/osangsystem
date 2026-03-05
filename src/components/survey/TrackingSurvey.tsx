@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import type { Questionnaire, SurveyType } from '@/types'
 import { calcSumScore, calcAsrsScore } from '@/lib/scoring'
 import SurveyResult from './SurveyResult'
@@ -35,6 +35,11 @@ export default function TrackingSurvey({ questionnaire, surveyType }: TrackingSu
   const totalItems = questionnaire.items.length
   const progressPercent = Math.round((totalAnswered / totalItems) * 100)
 
+  // 페이지 변경 시 스크롤 맨 위로 (모바일 대응)
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [currentPage])
+
   const handleAnswer = useCallback((itemId: string, value: number) => {
     setResponses((prev) => ({ ...prev, [itemId]: value }))
   }, [])
@@ -42,14 +47,12 @@ export default function TrackingSurvey({ questionnaire, surveyType }: TrackingSu
   function handleNext() {
     if (currentPage < totalPages - 1) {
       setCurrentPage((p) => p + 1)
-      window.scrollTo({ top: 0, behavior: 'smooth' })
     }
   }
 
   function handlePrev() {
     if (currentPage > 0) {
       setCurrentPage((p) => p - 1)
-      window.scrollTo({ top: 0, behavior: 'smooth' })
     }
   }
 

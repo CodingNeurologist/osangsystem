@@ -1,12 +1,12 @@
 import type { Metadata } from 'next'
-import { redirect } from 'next/navigation'
+import { cookies } from 'next/headers'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/server'
-import { createServiceClient } from '@/lib/supabase/server'
-import { LayoutDashboard, Music, Users, ExternalLink, BookOpen } from 'lucide-react'
+import { LayoutDashboard, Music, Users, BookOpen } from 'lucide-react'
+import { ADMIN_COOKIE_NAME, verifyAdminToken } from '@/lib/admin-auth'
+import AdminLogoutButton from '@/components/admin/AdminLogoutButton'
 
 export const metadata: Metadata = {
-  title: '관리자 대시보드',
+  title: '관리자 대시보드 | 오상케어',
 }
 
 export default async function AdminLayout({
@@ -14,20 +14,13 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode
 }) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const cookieStore = await cookies()
+  const adminToken = cookieStore.get(ADMIN_COOKIE_NAME)?.value
+  const isAuthenticated = adminToken ? await verifyAdminToken(adminToken) : false
 
-  if (!user) redirect('/login')
-
-  const serviceClient = await createServiceClient()
-  const { data: profile } = await serviceClient
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  if (!profile || !['admin', 'super_admin'].includes(profile.role)) {
-    redirect('/app')
+  // 비인증 상태 (로그인 페이지 등): 네비게이션 없이 렌더링
+  if (!isAuthenticated) {
+    return <>{children}</>
   }
 
   return (
@@ -35,7 +28,7 @@ export default async function AdminLayout({
       <header className="bg-white border-b border-zinc-200">
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link href="/" className="text-primary font-semibold">오상케어</Link>
+            <Link href="/admin" className="text-primary font-semibold">오상케어</Link>
             <span className="text-zinc-400">/</span>
             <span className="text-zinc-700 text-sm">관리자</span>
           </div>
@@ -61,22 +54,14 @@ export default async function AdminLayout({
               <Music className="h-4 w-4" />
               음악 관리
             </Link>
-            {profile.role === 'super_admin' && (
-              <Link
-                href="/admin/users"
-                className="text-sm text-zinc-600 hover:text-zinc-800 inline-flex items-center gap-1.5"
-              >
-                <Users className="h-4 w-4" />
-                사용자 관리
-              </Link>
-            )}
             <Link
-              href="/app"
-              className="text-sm text-primary hover:underline inline-flex items-center gap-1.5"
+              href="/admin/users"
+              className="text-sm text-zinc-600 hover:text-zinc-800 inline-flex items-center gap-1.5"
             >
-              <ExternalLink className="h-4 w-4" />
-              앱으로 이동
+              <Users className="h-4 w-4" />
+              사용자 관리
             </Link>
+            <AdminLogoutButton />
           </div>
         </div>
       </header>

@@ -1,6 +1,5 @@
-import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/server'
 import MusicTrackManager from '@/components/admin/MusicTrackManager'
 import type { MusicTrack } from '@/types'
 
@@ -9,20 +8,7 @@ export const metadata: Metadata = {
 }
 
 export default async function AdminMusicPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
   const service = await createServiceClient()
-  const { data: profile } = await service
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  if (!profile || !['admin', 'super_admin'].includes(profile.role)) {
-    redirect('/app')
-  }
 
   const { data: tracks } = await service
     .from('music_tracks')

@@ -135,6 +135,7 @@ export default function BinauralPlayer({ onSessionComplete }: BinauralPlayerProp
   const [elapsed, setElapsed] = useState(0) // seconds
   const [showTimerPanel, setShowTimerPanel] = useState(false)
 
+  // AudioContext persists across play/stop cycles (not closed until unmount)
   const audioCtxRef = useRef<AudioContext | null>(null)
   const gainRef = useRef<GainNode | null>(null)
   const ambientGainRef = useRef<GainNode | null>(null)
@@ -144,21 +145,46 @@ export default function BinauralPlayer({ onSessionComplete }: BinauralPlayerProp
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const startTimeRef = useRef(0)
 
-  const stopAudio = useCallback(() => {
-    try {
-      leftOscRef.current?.stop()
-      rightOscRef.current?.stop()
-    } catch { /* ignore */ }
-    try {
-      ambientSourceRef.current?.stop()
-    } catch { /* ignore */ }
-    audioCtxRef.current?.close()
-    audioCtxRef.current = null
+  // Stop only the ambient sound, leaving binaural oscillators running
+  const stopAmbientSound = useCallback(() => {
+    try { ambientSourceRef.current?.stop() } catch { /* already stopped */ }
+    try { ambientGainRef.current?.disconnect() } catch { /* ignore */ }
+    ambientSourceRef.current = null
+    ambientGainRef.current = null
+  }, [])
+
+  // Start ambient sound on the given AudioContext
+  const startAmbientSound = useCallback((ctx: AudioContext, type: string, vol: number) => {
+    if (type === 'none') return
+
+    const ambientGain = ctx.createGain()
+    ambientGain.gain.value = vol
+    ambientGainRef.current = ambientGain
+
+    const buffer = createNoiseBuffer(ctx, type)
+    const source = ctx.createBufferSource()
+    source.buffer = buffer
+    source.loop = true
+    source.connect(ambientGain)
+    ambientGain.connect(ctx.destination)
+    source.start()
+    ambientSourceRef.current = source
+  }, [])
+
+  // Stop binaural oscillators only
+  const stopBinauralOscillators = useCallback(() => {
+    try { leftOscRef.current?.stop() } catch { /* already stopped */ }
+    try { rightOscRef.current?.stop() } catch { /* already stopped */ }
+    try { gainRef.current?.disconnect() } catch { /* ignore */ }
     leftOscRef.current = null
     rightOscRef.current = null
     gainRef.current = null
-    ambientGainRef.current = null
-    ambientSourceRef.current = null
+  }, [])
+
+  // Stop everything (oscillators + ambient + timer) but keep AudioContext alive
+  const stopAll = useCallback(() => {
+    stopBinauralOscillators()
+    stopAmbientSound()
 
     if (timerRef.current) {
       clearInterval(timerRef.current)
@@ -166,19 +192,34 @@ export default function BinauralPlayer({ onSessionComplete }: BinauralPlayerProp
     }
 
     setIsPlaying(false)
-  }, [])
+  }, [stopBinauralOscillators, stopAmbientSound])
 
   const handleSessionEnd = useCallback(() => {
     const duration = Math.round((Date.now() - startTimeRef.current) / 1000)
-    stopAudio()
+    stopAll()
     onSessionComplete?.({ presetId: selectedPreset.id, durationSec: duration })
-  }, [stopAudio, onSessionComplete, selectedPreset.id])
+  }, [stopAll, onSessionComplete, selectedPreset.id])
 
-  function startAudio() {
-    const ctx = new AudioContext()
-    audioCtxRef.current = ctx
+  // Main play function — creates/resumes AudioContext (mobile fix) and starts nodes
+  async function handleToggle() {
+    if (isPlaying) {
+      handleSessionEnd()
+      return
+    }
 
-    // Binaural beat gain
+    // Create or reuse AudioContext (never close until unmount)
+    let ctx = audioCtxRef.current
+    if (!ctx || ctx.state === 'closed') {
+      ctx = new AudioContext()
+      audioCtxRef.current = ctx
+    }
+
+    // Mobile browsers require resume() on user gesture
+    if (ctx.state === 'suspended') {
+      await ctx.resume()
+    }
+
+    // Create binaural oscillators
     const gain = ctx.createGain()
     gain.gain.value = volume
     gainRef.current = gain
@@ -206,21 +247,8 @@ export default function BinauralPlayer({ onSessionComplete }: BinauralPlayerProp
     leftOsc.start()
     rightOsc.start()
 
-    // Ambient sound
-    if (ambientType !== 'none') {
-      const ambientGain = ctx.createGain()
-      ambientGain.gain.value = ambientVolume
-      ambientGainRef.current = ambientGain
-
-      const buffer = createNoiseBuffer(ctx, ambientType)
-      const source = ctx.createBufferSource()
-      source.buffer = buffer
-      source.loop = true
-      source.connect(ambientGain)
-      ambientGain.connect(ctx.destination)
-      source.start()
-      ambientSourceRef.current = source
-    }
+    // Start ambient sound if selected
+    startAmbientSound(ctx, ambientType, ambientVolume)
 
     startTimeRef.current = Date.now()
     setElapsed(0)
@@ -232,17 +260,23 @@ export default function BinauralPlayer({ onSessionComplete }: BinauralPlayerProp
     }, 1000)
   }
 
-  function handleToggle() {
-    if (isPlaying) {
-      handleSessionEnd()
-    } else {
-      startAudio()
+  // Change preset — if playing, update oscillator frequencies live (no interruption)
+  function handleSelectPreset(preset: Preset) {
+    setSelectedPreset(preset)
+    if (isPlaying && leftOscRef.current && rightOscRef.current && audioCtxRef.current) {
+      const ctx = audioCtxRef.current
+      leftOscRef.current.frequency.setValueAtTime(preset.base, ctx.currentTime)
+      rightOscRef.current.frequency.setValueAtTime(preset.base + preset.beat, ctx.currentTime)
     }
   }
 
-  function handleSelectPreset(preset: Preset) {
-    if (isPlaying) stopAudio()
-    setSelectedPreset(preset)
+  // Change ambient — if playing, swap ambient without touching binaural oscillators
+  function handleAmbientTypeChange(type: string) {
+    setAmbientType(type)
+    if (isPlaying && audioCtxRef.current) {
+      stopAmbientSound()
+      startAmbientSound(audioCtxRef.current, type, ambientVolume)
+    }
   }
 
   function handleVolumeChange(v: number) {
@@ -281,9 +315,16 @@ export default function BinauralPlayer({ onSessionComplete }: BinauralPlayerProp
     }
   }, [isPlaying, sleepTimerMinutes, elapsed, volume, ambientVolume, handleSessionEnd])
 
+  // Cleanup on unmount — close AudioContext to prevent memory leaks
   useEffect(() => {
-    return () => stopAudio()
-  }, [stopAudio])
+    return () => {
+      try { leftOscRef.current?.stop() } catch { /* ignore */ }
+      try { rightOscRef.current?.stop() } catch { /* ignore */ }
+      try { ambientSourceRef.current?.stop() } catch { /* ignore */ }
+      if (timerRef.current) clearInterval(timerRef.current)
+      try { audioCtxRef.current?.close() } catch { /* ignore */ }
+    }
+  }, [])
 
   const formatTime = (sec: number) => {
     const m = Math.floor(sec / 60)
@@ -323,17 +364,14 @@ export default function BinauralPlayer({ onSessionComplete }: BinauralPlayerProp
         ))}
       </div>
 
-      {/* Ambient sound selector */}
+      {/* Ambient sound selector — switches without stopping binaural */}
       <div className="space-y-2">
         <p className="text-xs text-zinc-500 font-medium">배경음</p>
         <div className="flex gap-1.5 flex-wrap">
           {AMBIENT_SOUNDS.map((sound) => (
             <button
               key={sound.id}
-              onClick={() => {
-                if (isPlaying) stopAudio()
-                setAmbientType(sound.id)
-              }}
+              onClick={() => handleAmbientTypeChange(sound.id)}
               className={`px-3 py-1.5 rounded-lg text-xs transition-colors ${
                 ambientType === sound.id
                   ? 'bg-zinc-900 text-white'

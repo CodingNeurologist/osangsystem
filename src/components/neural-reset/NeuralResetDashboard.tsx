@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Wind, Music, BookOpen, ClipboardCheck, Award, AlertTriangle, Phone, ChevronRight, ShieldAlert, Activity, Settings, BarChart3, Calendar } from 'lucide-react'
+import { Wind, Music, BookOpen, ClipboardCheck, Award, AlertTriangle, Phone, ChevronRight, ShieldAlert, Activity, Settings, BarChart3, Calendar, HeartPulse } from 'lucide-react'
 import type { DailyCheckin } from '@/types'
 import StreakDisplay from './StreakDisplay'
 import MoodCalendar from './MoodCalendar'
@@ -33,10 +33,16 @@ const QUICK_TOOLS = [
     color: 'bg-amber-50 text-amber-600',
   },
   {
+    href: '/app/neural-reset/hrv',
+    icon: HeartPulse,
+    label: 'HRV',
+    color: 'bg-rose-50 text-rose-600',
+  },
+  {
     href: '/app/neural-reset/badges',
     icon: Award,
     label: '배지',
-    color: 'bg-rose-50 text-rose-500',
+    color: 'bg-pink-50 text-pink-500',
   },
   {
     href: '/app/neural-reset/report',

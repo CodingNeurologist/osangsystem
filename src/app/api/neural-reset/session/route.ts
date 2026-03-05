@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { activity_type, activity_detail, duration_sec, pre_distress, post_distress, completed } = body
 
-    const validTypes = ['breathing', 'somatic', 'meditation', 'journal', 'sos']
+    const validTypes = ['breathing', 'somatic', 'meditation', 'journal', 'sos', 'hrv']
     if (!validTypes.includes(activity_type)) {
       return NextResponse.json({ error: '올바르지 않은 활동 유형입니다.' }, { status: 400 })
     }

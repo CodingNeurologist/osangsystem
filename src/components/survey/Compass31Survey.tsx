@@ -51,6 +51,11 @@ export default function Compass31Survey() {
     }
   }, [])
 
+  // 문항 변경 시 스크롤 맨 위로 (모바일 대응)
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [currentIndex])
+
   // single 선택 핸들러 — 자동 진행
   const handleSingleSelect = useCallback(
     (questionId: string, value: string) => {
@@ -102,14 +107,12 @@ export default function Compass31Survey() {
   function goNext() {
     if (currentIndex < totalVisible - 1) {
       setCurrentIndex((i) => i + 1)
-      window.scrollTo({ top: 0, behavior: 'smooth' })
     }
   }
 
   function goPrev() {
     if (currentIndex > 0) {
       setCurrentIndex((i) => i - 1)
-      window.scrollTo({ top: 0, behavior: 'smooth' })
     }
   }
 

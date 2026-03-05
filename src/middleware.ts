@@ -1,12 +1,44 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { updateSession } from '@/lib/supabase/middleware'
 import { createServerClient } from '@supabase/ssr'
+import { ADMIN_COOKIE_NAME, computeAdminToken } from '@/lib/admin-auth'
 
 export async function middleware(request: NextRequest) {
   try {
-    const { supabaseResponse, user } = await updateSession(request)
-
     const pathname = request.nextUrl.pathname
+
+    // ── 관리자 영역: 쿠키 기반 독립 인증 ──
+    if (pathname.startsWith('/admin') || pathname.startsWith('/api/admin')) {
+      // 로그인 페이지와 인증 API는 통과
+      if (pathname === '/admin/login' || pathname === '/api/admin/auth') {
+        return NextResponse.next()
+      }
+
+      const adminToken = request.cookies.get(ADMIN_COOKIE_NAME)?.value
+      if (!adminToken) {
+        if (pathname.startsWith('/api/admin')) {
+          return NextResponse.json({ error: '관리자 인증이 필요합니다' }, { status: 401 })
+        }
+        const url = request.nextUrl.clone()
+        url.pathname = '/admin/login'
+        return NextResponse.redirect(url)
+      }
+
+      const expectedToken = await computeAdminToken()
+      if (adminToken !== expectedToken) {
+        if (pathname.startsWith('/api/admin')) {
+          return NextResponse.json({ error: '관리자 인증이 필요합니다' }, { status: 401 })
+        }
+        const url = request.nextUrl.clone()
+        url.pathname = '/admin/login'
+        return NextResponse.redirect(url)
+      }
+
+      return NextResponse.next()
+    }
+
+    // ── 사용자 영역: Supabase 인증 ──
+    const { supabaseResponse, user } = await updateSession(request)
 
     // /app/* 경로: 로그인 필수
     if (pathname.startsWith('/app')) {
@@ -50,46 +82,6 @@ export async function middleware(request: NextRequest) {
       }
     }
 
-    // /admin/* 경로: 관리자 권한 필수
-    if (pathname.startsWith('/admin')) {
-      if (!user) {
-        const url = request.nextUrl.clone()
-        url.pathname = '/login'
-        url.searchParams.set('redirectTo', pathname)
-        return NextResponse.redirect(url)
-      }
-
-      if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-        const url = request.nextUrl.clone()
-        url.pathname = '/app'
-        return NextResponse.redirect(url)
-      }
-
-      // 역할 확인 (Supabase service role로 profiles 조회)
-      const supabase = createServerClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY,
-        {
-          cookies: {
-            getAll() { return request.cookies.getAll() },
-            setAll() {},
-          },
-        }
-      )
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single()
-
-      if (!profile || !['admin', 'super_admin'].includes(profile.role)) {
-        const url = request.nextUrl.clone()
-        url.pathname = '/app'
-        return NextResponse.redirect(url)
-      }
-    }
-
     // 이미 로그인된 사용자가 /login, /signup 접근 시 /app으로 리디렉션
     if (user && (pathname === '/login' || pathname === '/signup')) {
       const url = request.nextUrl.clone()
@@ -106,6 +98,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|sw\\.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp|webmanifest)$).*)',
   ],
 }

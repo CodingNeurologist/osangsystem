@@ -9,7 +9,7 @@ import { BREATHING_PATTERNS, CYCLE_OPTIONS } from '@/data/breathing-patterns'
 
 type Phase = 'idle' | 'inhale' | 'hold1' | 'exhale' | 'hold2' | 'done'
 
-const SCALE_MIN = 0.55
+const SCALE_MIN = 0.35
 const SCALE_MAX = 1
 
 interface BreathingGuideProps {
@@ -204,7 +204,12 @@ export default function BreathingGuide({ initialPatternId, onSessionComplete }: 
     done: '잘 하셨습니다',
   }
 
-  const easing = 'cubic-bezier(0.22, 1, 0.36, 1)'
+  // 흡기: 시간에 맞게 일정하게 커지도록 linear, 호기: 부드럽게 줄어들도록 ease-out
+  const easing = phase === 'inhale'
+    ? 'linear'
+    : phase === 'exhale'
+      ? 'cubic-bezier(0.4, 0, 0.2, 1)'
+      : 'ease'
   const primaryColor = 'hsl(var(--primary))'
   const activeColor =
     phase === 'inhale' || phase === 'hold1'

@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { ChevronLeft, ChevronRight, CheckCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import StressCheckProgressBar from './StressCheckProgressBar'
 import StressCheckCategoryPage from './StressCheckCategoryPage'
+import StressScorePage from './StressScorePage'
 import StressCheckLifestylePage from './StressCheckLifestylePage'
 import StressCheckResultView from './StressCheckResult'
 import {
@@ -15,25 +16,37 @@ import {
 import { calculateStressCheckScore } from '@/utils/surveyScoring'
 import type { StressCheckScoreResult } from '@/types'
 
-const TOTAL_PAGES = STRESS_CHECK_CATEGORIES.length + 1 // 8 categories + 1 lifestyle
+// 8 categories + 1 stress score page + 1 lifestyle
+const TOTAL_PAGES = STRESS_CHECK_CATEGORIES.length + 2
 
 export default function StressCheckSurvey() {
   const [currentPage, setCurrentPage] = useState(0)
   const [checkedItems, setCheckedItems] = useState<Record<string, boolean>>({})
-  const [lifestyleAnswers, setLifestyleAnswers] = useState<Record<string, string | number>>({
-    'stress-level': 50,
-  })
+  const [stressScore, setStressScore] = useState<number | null>(null)
+  const [lifestyleAnswers, setLifestyleAnswers] = useState<Record<string, string | number>>({})
   const [result, setResult] = useState<StressCheckScoreResult | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [direction, setDirection] = useState<'forward' | 'backward'>('forward')
   const [isAnimating, setIsAnimating] = useState(false)
   const startTimeRef = useRef(Date.now())
 
+  const stressScorePageIndex = STRESS_CHECK_CATEGORIES.length
+  const lifestylePageIndex = STRESS_CHECK_CATEGORIES.length + 1
+
+  // 페이지 변경 시 스크롤 맨 위로 (모바일 대응)
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [currentPage])
+
   const handleToggle = useCallback((itemId: string) => {
     setCheckedItems((prev) => ({
       ...prev,
       [itemId]: !prev[itemId],
     }))
+  }, [])
+
+  const handleStressScoreChange = useCallback((value: number) => {
+    setStressScore(value)
   }, [])
 
   const handleLifestyleAnswer = useCallback((questionId: string, value: string | number) => {
@@ -70,9 +83,15 @@ export default function StressCheckSurvey() {
   const handleSubmit = useCallback(async () => {
     setIsSubmitting(true)
 
+    // 스트레스 주관점수를 lifestyleAnswers에 병합
+    const mergedLifestyle: Record<string, string | number> = {
+      ...lifestyleAnswers,
+      'stress-level': stressScore ?? 50,
+    }
+
     const scoreResult = calculateStressCheckScore(
       checkedItems,
-      lifestyleAnswers,
+      mergedLifestyle,
       STRESS_CHECK_CATEGORIES,
       STRESS_CHECK_SEVERITY_LEVELS
     )
@@ -90,7 +109,7 @@ export default function StressCheckSurvey() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          responses: { ...checkedItems, ...lifestyleAnswers },
+          responses: { ...checkedItems, ...mergedLifestyle },
           category_scores: categoryScoresMap,
           total_score: Math.round(scoreResult.overallScore),
           severity_level: scoreResult.severity,
@@ -103,7 +122,7 @@ export default function StressCheckSurvey() {
 
     setResult(scoreResult)
     setIsSubmitting(false)
-  }, [checkedItems, lifestyleAnswers])
+  }, [checkedItems, stressScore, lifestyleAnswers])
 
   // 결과 화면
   if (result) {
@@ -112,7 +131,12 @@ export default function StressCheckSurvey() {
 
   const isLastPage = currentPage === TOTAL_PAGES - 1
   const isCategoryPage = currentPage < STRESS_CHECK_CATEGORIES.length
+  const isStressScorePage = currentPage === stressScorePageIndex
+  const isLifestylePage = currentPage === lifestylePageIndex
   const currentCategory = isCategoryPage ? STRESS_CHECK_CATEGORIES[currentPage] : null
+
+  // 스트레스 점수 페이지에서 다음으로 넘어가려면 반드시 점수를 선택해야 함
+  const canGoNext = isStressScorePage ? stressScore !== null : true
 
   return (
     <div className="min-h-screen px-4 py-6 bg-zinc-50">
@@ -142,7 +166,14 @@ export default function StressCheckSurvey() {
             />
           )}
 
-          {!isCategoryPage && (
+          {isStressScorePage && (
+            <StressScorePage
+              value={stressScore}
+              onChange={handleStressScoreChange}
+            />
+          )}
+
+          {isLifestylePage && (
             <StressCheckLifestylePage
               questions={LIFESTYLE_QUESTIONS}
               answers={lifestyleAnswers}
@@ -184,7 +215,7 @@ export default function StressCheckSurvey() {
             <Button
               size="lg"
               onClick={goNext}
-              disabled={isAnimating}
+              disabled={isAnimating || !canGoNext}
               className="flex-1"
             >
               다음

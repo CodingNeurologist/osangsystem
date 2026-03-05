@@ -345,7 +345,7 @@ export interface StressCheckScoreResult {
 // 뉴럴리셋 (Neural Reset)
 // ============================================================
 
-export type ResetActivityType = 'breathing' | 'somatic' | 'meditation' | 'journal' | 'sos'
+export type ResetActivityType = 'breathing' | 'somatic' | 'meditation' | 'journal' | 'sos' | 'hrv'
 
 export interface DailyCheckin {
   id: string

@@ -17,7 +17,6 @@ interface Admin {
 
 interface AdminUserTableProps {
   admins: Admin[]
-  currentUserId: string
 }
 
 const ROLE_LABELS: Record<UserRole, string> = {
@@ -26,7 +25,7 @@ const ROLE_LABELS: Record<UserRole, string> = {
   super_admin: '슈퍼 관리자',
 }
 
-export default function AdminUserTable({ admins: initial, currentUserId }: AdminUserTableProps) {
+export default function AdminUserTable({ admins: initial }: AdminUserTableProps) {
   const [admins, setAdmins] = useState(initial)
   const [loading, setLoading] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -93,43 +92,39 @@ export default function AdminUserTable({ admins: initial, currentUserId }: Admin
                   {new Date(admin.created_at).toLocaleDateString('ko-KR')}
                 </TableCell>
                 <TableCell className="text-right">
-                  {admin.id !== currentUserId ? (
-                    <div className="flex justify-end gap-1">
-                      {admin.role !== 'super_admin' && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => changeRole(admin.id, 'super_admin')}
-                          disabled={loading === admin.id}
-                          className="text-purple-600 hover:text-purple-700"
-                        >
-                          슈퍼 승격
-                        </Button>
-                      )}
-                      {admin.role !== 'admin' && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => changeRole(admin.id, 'admin')}
-                          disabled={loading === admin.id}
-                          className="text-blue-600 hover:text-blue-700"
-                        >
-                          관리자로
-                        </Button>
-                      )}
+                  <div className="flex justify-end gap-1">
+                    {admin.role !== 'super_admin' && (
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => changeRole(admin.id, 'user')}
+                        onClick={() => changeRole(admin.id, 'super_admin')}
                         disabled={loading === admin.id}
-                        className="text-red-500 hover:text-red-600"
+                        className="text-purple-600 hover:text-purple-700"
                       >
-                        권한 해제
+                        슈퍼 승격
                       </Button>
-                    </div>
-                  ) : (
-                    <span className="text-xs text-zinc-400">본인</span>
-                  )}
+                    )}
+                    {admin.role !== 'admin' && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => changeRole(admin.id, 'admin')}
+                        disabled={loading === admin.id}
+                        className="text-blue-600 hover:text-blue-700"
+                      >
+                        관리자로
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => changeRole(admin.id, 'user')}
+                      disabled={loading === admin.id}
+                      className="text-red-500 hover:text-red-600"
+                    >
+                      권한 해제
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}

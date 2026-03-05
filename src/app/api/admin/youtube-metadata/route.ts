@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { requireAdminAuth } from '@/lib/admin-auth'
 import { z } from 'zod'
 
 const requestSchema = z.object({
@@ -13,24 +13,6 @@ interface OEmbedResponse {
   thumbnail_url?: string
   type?: string
   provider_name?: string
-}
-
-async function requireAdmin(req: NextRequest) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return null
-
-  const service = await createServiceClient()
-  const { data: profile } = await service
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  if (!profile || !['admin', 'super_admin'].includes(profile.role)) return null
-  return { user, service }
 }
 
 function extractVideoId(url: string): string | null {
@@ -73,10 +55,8 @@ function decodeHtmlEntities(text: string): string {
 
 // POST /api/admin/youtube-metadata
 export async function POST(request: NextRequest) {
-  const ctx = await requireAdmin(request)
-  if (!ctx) {
-    return NextResponse.json({ error: '권한 없음' }, { status: 403 })
-  }
+  const authError = await requireAdminAuth()
+  if (authError) return authError
 
   const body = await request.json()
   const parsed = requestSchema.safeParse(body)

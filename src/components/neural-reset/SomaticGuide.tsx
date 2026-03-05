@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { ArrowLeft, Play, Pause, SkipForward, CheckCircle2 } from 'lucide-react'
 import type { SomaticExercise } from '@/types'
+import SomaticIllustration from './somatic-illustrations/SomaticIllustration'
 
 interface SomaticGuideProps {
   exercise: SomaticExercise
@@ -218,9 +219,12 @@ export default function SomaticGuide({ exercise, onBack, onComplete }: SomaticGu
         <span className="text-xs text-zinc-400">{exercise.name}</span>
       </div>
 
+      {/* Illustration */}
+      <SomaticIllustration exerciseId={exercise.id} stepIndex={currentStep} />
+
       {/* Instruction */}
-      <div className="min-h-[120px] flex items-center justify-center px-4">
-        <p className="text-center text-zinc-900 leading-relaxed">
+      <div className="min-h-[80px] flex items-center justify-center px-4">
+        <p className="text-center text-sm text-zinc-900 leading-relaxed">
           {step.instruction}
         </p>
       </div>

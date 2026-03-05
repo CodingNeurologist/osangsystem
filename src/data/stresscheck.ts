@@ -151,14 +151,6 @@ export const STRESS_CHECK_CATEGORIES: StressCheckCategory[] = [
 
 export const LIFESTYLE_QUESTIONS: StressCheckLifestyleQuestion[] = [
   {
-    id: 'stress-level',
-    text: '평소에 스트레스를 얼마나 받나요?',
-    type: 'slider',
-    sliderMin: 0,
-    sliderMax: 100,
-    sliderUnit: '점',
-  },
-  {
     id: 'exercise',
     text: '운동 습관을 골라주세요',
     type: 'single',

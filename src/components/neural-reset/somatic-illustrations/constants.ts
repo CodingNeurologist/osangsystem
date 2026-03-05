@@ -1,0 +1,22 @@
+/** 따뜻한 2D 만화 스타일 색상 팔레트 */
+export const C = {
+  skin: '#F8D5BE',
+  skinShadow: '#EABC9E',
+  hair: '#7C5B4A',
+  hairLight: '#9E7A65',
+  top: '#7EC8D3',
+  topShadow: '#5FB0BC',
+  bottom: '#8B9DC3',
+  bottomShadow: '#7388AD',
+  eye: '#4A3A30',
+  cheek: '#F5ADA0',
+  mouth: '#D68B7A',
+  highlight: '#FFB088',
+  highlightGlow: '#FFD4B8',
+  motion: '#B8C8D8',
+  motionAccent: '#8BA4BC',
+  breathe: '#A8D8C8',
+  warmBg: '#FFF7F0',
+  squeeze: '#E8847C',
+  peaceful: '#C5E8D8',
+} as const

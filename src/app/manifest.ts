@@ -2,16 +2,19 @@ import type { MetadataRoute } from 'next'
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
+    id: '/osangcare',
     name: '오상케어',
     short_name: '오상케어',
     description: '자율신경실조증 자가진단과 스트레스 관리를 위한 오상신경외과 복지 플랫폼',
-    start_url: '/app',
+    start_url: '/',
+    scope: '/',
     display: 'standalone',
     orientation: 'portrait',
     background_color: '#ffffff',
-    theme_color: '#0284c7',
+    theme_color: '#b7945a',
     categories: ['health', 'medical'],
     lang: 'ko',
+    prefer_related_applications: false,
     icons: [
       {
         src: '/icons/icon.svg',

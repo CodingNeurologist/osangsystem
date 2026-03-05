@@ -5,12 +5,75 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { AlertTriangle, Phone } from 'lucide-react'
 
-const DIMENSIONS = [
-  { id: 'body', label: '신체 컨디션', emojis: ['😫', '😣', '😐', '🙂', '😊'] },
-  { id: 'mood', label: '기분', emojis: ['😢', '😔', '😐', '🙂', '😄'] },
-  { id: 'energy', label: '에너지', emojis: ['🪫', '😴', '😐', '⚡', '🔋'] },
-  { id: 'stress', label: '스트레스', emojis: ['🔴', '🟠', '🟡', '🟢', '💚'] },
-] as const
+// ── 비주얼 스케일 정의 ──────────────────────────────
+// 각 차원별로 5단계, 컬러 + 아이콘(심플 원) + 라벨로 구성
+
+interface ScaleLevel {
+  value: number
+  label: string
+  color: string        // 선택 시 배경색
+  ringColor: string    // 선택 시 링 색
+  dotColor: string     // 원 안쪽 색
+  textColor: string    // 선택 시 라벨 색
+}
+
+interface Dimension {
+  id: string
+  label: string
+  description: string
+  levels: ScaleLevel[]
+}
+
+const DIMENSIONS: Dimension[] = [
+  {
+    id: 'body',
+    label: '신체 컨디션',
+    description: '몸의 전반적인 상태',
+    levels: [
+      { value: 1, label: '매우 안좋음', color: 'bg-red-50', ringColor: 'ring-red-300', dotColor: 'bg-red-400', textColor: 'text-red-600' },
+      { value: 2, label: '안좋음', color: 'bg-orange-50', ringColor: 'ring-orange-300', dotColor: 'bg-orange-400', textColor: 'text-orange-600' },
+      { value: 3, label: '보통', color: 'bg-amber-50', ringColor: 'ring-amber-300', dotColor: 'bg-amber-400', textColor: 'text-amber-600' },
+      { value: 4, label: '좋음', color: 'bg-emerald-50', ringColor: 'ring-emerald-300', dotColor: 'bg-emerald-400', textColor: 'text-emerald-600' },
+      { value: 5, label: '매우 좋음', color: 'bg-green-50', ringColor: 'ring-green-300', dotColor: 'bg-green-500', textColor: 'text-green-600' },
+    ],
+  },
+  {
+    id: 'mood',
+    label: '기분',
+    description: '감정 상태',
+    levels: [
+      { value: 1, label: '매우 우울', color: 'bg-violet-50', ringColor: 'ring-violet-300', dotColor: 'bg-violet-400', textColor: 'text-violet-600' },
+      { value: 2, label: '우울', color: 'bg-blue-50', ringColor: 'ring-blue-300', dotColor: 'bg-blue-400', textColor: 'text-blue-600' },
+      { value: 3, label: '보통', color: 'bg-amber-50', ringColor: 'ring-amber-300', dotColor: 'bg-amber-400', textColor: 'text-amber-600' },
+      { value: 4, label: '좋음', color: 'bg-teal-50', ringColor: 'ring-teal-300', dotColor: 'bg-teal-400', textColor: 'text-teal-600' },
+      { value: 5, label: '매우 좋음', color: 'bg-green-50', ringColor: 'ring-green-300', dotColor: 'bg-green-500', textColor: 'text-green-600' },
+    ],
+  },
+  {
+    id: 'energy',
+    label: '에너지',
+    description: '활력 수준',
+    levels: [
+      { value: 1, label: '극도로 피곤', color: 'bg-slate-50', ringColor: 'ring-slate-300', dotColor: 'bg-slate-400', textColor: 'text-slate-600' },
+      { value: 2, label: '피곤', color: 'bg-zinc-50', ringColor: 'ring-zinc-300', dotColor: 'bg-zinc-400', textColor: 'text-zinc-500' },
+      { value: 3, label: '보통', color: 'bg-amber-50', ringColor: 'ring-amber-300', dotColor: 'bg-amber-400', textColor: 'text-amber-600' },
+      { value: 4, label: '활기참', color: 'bg-sky-50', ringColor: 'ring-sky-300', dotColor: 'bg-sky-400', textColor: 'text-sky-600' },
+      { value: 5, label: '매우 활기참', color: 'bg-blue-50', ringColor: 'ring-blue-300', dotColor: 'bg-blue-500', textColor: 'text-blue-600' },
+    ],
+  },
+  {
+    id: 'stress',
+    label: '스트레스',
+    description: '스트레스 정도',
+    levels: [
+      { value: 1, label: '매우 높음', color: 'bg-red-50', ringColor: 'ring-red-300', dotColor: 'bg-red-500', textColor: 'text-red-600' },
+      { value: 2, label: '높음', color: 'bg-orange-50', ringColor: 'ring-orange-300', dotColor: 'bg-orange-400', textColor: 'text-orange-600' },
+      { value: 3, label: '보통', color: 'bg-amber-50', ringColor: 'ring-amber-300', dotColor: 'bg-amber-400', textColor: 'text-amber-600' },
+      { value: 4, label: '낮음', color: 'bg-emerald-50', ringColor: 'ring-emerald-300', dotColor: 'bg-emerald-400', textColor: 'text-emerald-600' },
+      { value: 5, label: '매우 낮음', color: 'bg-green-50', ringColor: 'ring-green-300', dotColor: 'bg-green-500', textColor: 'text-green-600' },
+    ],
+  },
+]
 
 const SYMPTOM_TAGS = [
   '어지럼증', '두근거림', '소화불량', '두통', '불면',
@@ -131,30 +194,83 @@ export default function DailyCheckin({ onComplete }: DailyCheckinProps) {
       {step === 'score' && (
         <>
           <div className="space-y-5">
-            {DIMENSIONS.map((dim) => (
-              <div key={dim.id} className="space-y-2">
-                <span className="text-sm font-medium text-zinc-700">{dim.label}</span>
-                <div className="flex gap-2">
-                  {dim.emojis.map((emoji, idx) => {
-                    const value = idx + 1
-                    const selected = scores[dim.id] === value
-                    return (
-                      <button
-                        key={value}
-                        onClick={() => handleScore(dim.id, value)}
-                        className={`flex-1 flex items-center justify-center h-12 rounded-lg text-xl transition-all ${
-                          selected
-                            ? 'bg-zinc-900 shadow-sm scale-105'
-                            : 'bg-zinc-50 hover:bg-zinc-100'
-                        }`}
-                      >
-                        {emoji}
-                      </button>
-                    )
-                  })}
+            {DIMENSIONS.map((dim) => {
+              const selected = scores[dim.id]
+              const selectedLevel = dim.levels.find((l) => l.value === selected)
+
+              return (
+                <div key={dim.id} className="space-y-2.5">
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-sm font-medium text-zinc-700">{dim.label}</span>
+                    {selectedLevel && (
+                      <span className={`text-xs font-medium ${selectedLevel.textColor} transition-colors`}>
+                        {selectedLevel.label}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* 컬러 그라디언트 바 배경 */}
+                  <div className="relative">
+                    <div className="flex gap-1.5">
+                      {dim.levels.map((level) => {
+                        const isSelected = selected === level.value
+                        return (
+                          <button
+                            key={level.value}
+                            onClick={() => handleScore(dim.id, level.value)}
+                            className={`
+                              flex-1 flex flex-col items-center gap-1 py-2.5 rounded-xl
+                              transition-all duration-200
+                              ${isSelected
+                                ? `${level.color} ring-2 ${level.ringColor} shadow-sm scale-[1.02]`
+                                : 'hover:bg-zinc-50 active:scale-95'
+                              }
+                            `}
+                          >
+                            {/* 컬러 도트 */}
+                            <div
+                              className={`
+                                w-8 h-8 rounded-full flex items-center justify-center
+                                transition-all duration-200
+                                ${isSelected
+                                  ? `${level.dotColor} shadow-sm`
+                                  : 'bg-zinc-100'
+                                }
+                              `}
+                            >
+                              <div
+                                className={`
+                                  w-3 h-3 rounded-full
+                                  transition-colors duration-200
+                                  ${isSelected ? 'bg-white' : 'bg-zinc-300'}
+                                `}
+                              />
+                            </div>
+
+                            {/* 하단 라벨 (항상 표시) */}
+                            <span
+                              className={`
+                                text-[10px] leading-tight text-center
+                                transition-colors duration-200
+                                ${isSelected ? level.textColor : 'text-zinc-400'}
+                              `}
+                            >
+                              {level.value}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+
+                    {/* 하단 가이드 */}
+                    <div className="flex justify-between mt-1 px-1">
+                      <span className="text-[10px] text-zinc-300">나쁨</span>
+                      <span className="text-[10px] text-zinc-300">좋음</span>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
           <Button
             className="w-full"
@@ -174,16 +290,18 @@ export default function DailyCheckin({ onComplete }: DailyCheckinProps) {
             </p>
             <div className="flex flex-wrap gap-2">
               {SYMPTOM_TAGS.map((symptom) => {
-                const selected = symptoms.includes(symptom)
+                const isSelected = symptoms.includes(symptom)
                 return (
                   <button
                     key={symptom}
                     onClick={() => toggleSymptom(symptom)}
-                    className={`px-3 py-1.5 rounded-full text-sm transition-colors ${
-                      selected
-                        ? 'bg-zinc-900 text-white'
-                        : 'bg-zinc-50 text-zinc-600 hover:bg-zinc-100'
-                    }`}
+                    className={`
+                      px-3.5 py-2 rounded-full text-sm transition-all duration-150
+                      ${isSelected
+                        ? 'bg-zinc-900 text-white shadow-sm'
+                        : 'bg-zinc-50 text-zinc-600 hover:bg-zinc-100 border border-zinc-100'
+                      }
+                    `}
                   >
                     {symptom}
                   </button>
