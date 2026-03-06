@@ -443,3 +443,37 @@ export interface JournalPrompt {
   text: string
   category: JournalPromptCategory
 }
+
+// ============================================================
+// HRV 측정 이력
+// ============================================================
+
+export interface HRVMeasurement {
+  id: string
+  user_id: string
+  mean_hr: number
+  sdnn: number
+  rmssd: number
+  pnn50: number
+  min_hr: number
+  max_hr: number
+  nn_count: number
+  lf_power: number | null
+  hf_power: number | null
+  lf_hf_ratio: number | null
+  ectopic_count: number
+  ectopic_ratio: number
+  arrhythmia_burden: 'normal' | 'borderline' | 'excessive'
+  confidence_score: number
+  confidence_label: '높음' | '보통' | '낮음'
+  valid_beat_count: number
+  clean_signal_ratio: number
+  measurement_duration: number
+  interpretation_level: 'good' | 'normal' | 'low'
+  interpretation_title: string
+  rr_intervals_json: unknown | null
+  user_note: string | null
+  is_anomaly: boolean
+  anomaly_reason: string | null
+  created_at: string
+}
