@@ -1,16 +1,19 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Play, Pause, RotateCcw, ChevronLeft } from 'lucide-react'
+import { Play, Pause, RotateCcw, ChevronLeft, Clock, Minus, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
 import type { BreathingPattern } from '@/types'
-import { BREATHING_PATTERNS, CYCLE_OPTIONS } from '@/data/breathing-patterns'
+import { BREATHING_PATTERNS } from '@/data/breathing-patterns'
+import BreathingFace from './BreathingFace'
 
 type Phase = 'idle' | 'inhale' | 'hold1' | 'exhale' | 'hold2' | 'done'
 
-const SCALE_MIN = 0.35
+const SCALE_MIN = 0.3
 const SCALE_MAX = 1
+
+/** 타이머 옵션 (분) */
+const TIMER_OPTIONS = [1, 2, 3, 5, 10] as const
 
 interface BreathingGuideProps {
   initialPatternId?: string
@@ -23,13 +26,14 @@ export default function BreathingGuide({ initialPatternId, onSessionComplete }: 
       ? BREATHING_PATTERNS.find((p) => p.id === initialPatternId) ?? null
       : null
   )
-  const [cycles, setCycles] = useState(0)
+  const [timerMinutes, setTimerMinutes] = useState(3)
   const [phase, setPhase] = useState<Phase>('idle')
   const [displayTime, setDisplayTime] = useState(0)
-  const [currentCycle, setCurrentCycle] = useState(0)
+  const [totalElapsedSec, setTotalElapsedSec] = useState(0)
+  const [completedCycles, setCompletedCycles] = useState(0)
   const [circleScale, setCircleScale] = useState(SCALE_MIN)
   const [transitionMs, setTransitionMs] = useState(0)
-  const [sessionStartTime, setSessionStartTime] = useState(0)
+  const [phaseProgress, setPhaseProgress] = useState(0)
 
   const rafRef = useRef(0)
   const phaseStartRef = useRef(0)
@@ -38,7 +42,8 @@ export default function BreathingGuide({ initialPatternId, onSessionComplete }: 
   const cycleRef = useRef(0)
   const stoppedRef = useRef(false)
   const patternRef = useRef<BreathingPattern | null>(null)
-  const totalCyclesRef = useRef(0)
+  const sessionStartRef = useRef(0)
+  const timerEndRef = useRef(0)
 
   const stopAll = useCallback(() => {
     stoppedRef.current = true
@@ -91,29 +96,33 @@ export default function BreathingGuide({ initialPatternId, onSessionComplete }: 
   const beginPhase = useCallback((nextPhase: Phase, cycle: number) => {
     if (stoppedRef.current) return
 
-    if (cycle > totalCyclesRef.current) {
+    // 타이머 종료 체크
+    if (performance.now() >= timerEndRef.current) {
       setPhase('done')
       setDisplayTime(0)
-      setCurrentCycle(0)
       setTransitionMs(800)
       setCircleScale(SCALE_MIN)
+      setPhaseProgress(0)
       phaseRef.current = 'done'
 
-      // 세션 완료 콜백
-      if (patternRef.current && sessionStartTime > 0) {
-        const durationSec = Math.round((performance.now() - sessionStartTime) / 1000)
-        onSessionComplete?.(patternRef.current.id, totalCyclesRef.current, durationSec)
+      if (patternRef.current && sessionStartRef.current > 0) {
+        const durationSec = Math.round((performance.now() - sessionStartRef.current) / 1000)
+        onSessionComplete?.(patternRef.current.id, cycleRef.current, durationSec)
       }
       return
     }
 
     const dur = getPhaseDuration(nextPhase)
     if (dur === 0) {
-      // 0초 페이즈는 건너뛰기
       const next = getNextPhase(nextPhase)
       cycleRef.current = next.cycle
       beginPhase(next.phase, next.cycle)
       return
+    }
+
+    // 새로운 사이클 시작 시 카운트 업데이트
+    if (nextPhase === 'inhale' && cycle > cycleRef.current) {
+      setCompletedCycles(cycle - 1)
     }
 
     phaseRef.current = nextPhase
@@ -123,7 +132,7 @@ export default function BreathingGuide({ initialPatternId, onSessionComplete }: 
 
     setPhase(nextPhase)
     setDisplayTime(dur)
-    setCurrentCycle(cycle)
+    setPhaseProgress(0)
 
     setTransitionMs(dur * 1000)
     requestAnimationFrame(() => {
@@ -134,10 +143,14 @@ export default function BreathingGuide({ initialPatternId, onSessionComplete }: 
 
     const tick = () => {
       if (stoppedRef.current) return
-      const elapsed = (performance.now() - phaseStartRef.current) / 1000
+      const now = performance.now()
+      const elapsed = (now - phaseStartRef.current) / 1000
       const remaining = Math.max(0, dur - elapsed)
+      const totalElapsed = Math.round((now - sessionStartRef.current) / 1000)
 
       setDisplayTime(Math.ceil(remaining))
+      setPhaseProgress(Math.min(1, elapsed / dur))
+      setTotalElapsedSec(totalElapsed)
 
       if (remaining > 0) {
         rafRef.current = requestAnimationFrame(tick)
@@ -148,28 +161,34 @@ export default function BreathingGuide({ initialPatternId, onSessionComplete }: 
       }
     }
     rafRef.current = requestAnimationFrame(tick)
-  }, [getPhaseDuration, getNextPhase, getScaleForPhase, onSessionComplete, sessionStartTime])
+  }, [getPhaseDuration, getNextPhase, getScaleForPhase, onSessionComplete])
 
   const handleStart = useCallback(() => {
     stopAll()
     stoppedRef.current = false
     setTransitionMs(0)
     setCircleScale(SCALE_MIN)
-    setSessionStartTime(performance.now())
+    setCompletedCycles(0)
+    setPhaseProgress(0)
+    const now = performance.now()
+    sessionStartRef.current = now
+    timerEndRef.current = now + timerMinutes * 60 * 1000
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         beginPhase('inhale', 1)
       })
     })
-  }, [stopAll, beginPhase])
+  }, [stopAll, beginPhase, timerMinutes])
 
   const handleStop = useCallback(() => {
     stopAll()
     setPhase('idle')
     setDisplayTime(0)
-    setCurrentCycle(0)
+    setCompletedCycles(0)
     setTransitionMs(600)
     setCircleScale(SCALE_MIN)
+    setPhaseProgress(0)
+    setTotalElapsedSec(0)
     phaseRef.current = 'idle'
   }, [stopAll])
 
@@ -180,23 +199,14 @@ export default function BreathingGuide({ initialPatternId, onSessionComplete }: 
     }
   }, [])
 
-  // 패턴 선택 시 ref 업데이트
   useEffect(() => {
     patternRef.current = selectedPattern
-    if (selectedPattern) {
-      setCycles(selectedPattern.defaultCycles)
-      totalCyclesRef.current = selectedPattern.defaultCycles
-    }
   }, [selectedPattern])
-
-  useEffect(() => {
-    totalCyclesRef.current = cycles
-  }, [cycles])
 
   const isRunning = phase === 'inhale' || phase === 'exhale' || phase === 'hold1' || phase === 'hold2'
 
   const phaseLabel: Record<Phase, string> = {
-    idle: '시작 버튼을 눌러 시작하세요',
+    idle: '준비되면 시작하세요',
     inhale: '들이쉬세요',
     hold1: '멈추세요',
     exhale: '내쉬세요',
@@ -204,12 +214,12 @@ export default function BreathingGuide({ initialPatternId, onSessionComplete }: 
     done: '잘 하셨습니다',
   }
 
-  // 흡기: 시간에 맞게 일정하게 커지도록 linear, 호기: 부드럽게 줄어들도록 ease-out
   const easing = phase === 'inhale'
-    ? 'linear'
+    ? 'cubic-bezier(0.4, 0, 0.2, 1)'
     : phase === 'exhale'
-      ? 'cubic-bezier(0.4, 0, 0.2, 1)'
+      ? 'cubic-bezier(0.25, 0.1, 0.25, 1)'
       : 'ease'
+
   const primaryColor = 'hsl(var(--primary))'
   const activeColor =
     phase === 'inhale' || phase === 'hold1'
@@ -217,6 +227,16 @@ export default function BreathingGuide({ initialPatternId, onSessionComplete }: 
       : phase === 'exhale' || phase === 'hold2'
         ? 'hsl(37 42% 48%)'
         : primaryColor
+
+  const remainingTimerSec = isRunning
+    ? Math.max(0, Math.round((timerEndRef.current - performance.now()) / 1000))
+    : timerMinutes * 60
+
+  const formatTime = (sec: number) => {
+    const m = Math.floor(sec / 60)
+    const s = sec % 60
+    return `${m}:${s.toString().padStart(2, '0')}`
+  }
 
   // 패턴 선택 화면
   if (!selectedPattern) {
@@ -258,99 +278,131 @@ export default function BreathingGuide({ initialPatternId, onSessionComplete }: 
   }
 
   return (
-    <div className="space-y-6">
-      {/* 뒤로가기 + 패턴 정보 */}
+    <div className="flex flex-col items-center min-h-[calc(100dvh-120px)]">
+      {/* 상단 바: 뒤로가기 + 패턴 이름 + 타이머 */}
+      <div className="w-full flex items-center justify-between mb-4">
+        <button
+          onClick={() => {
+            handleStop()
+            setSelectedPattern(null)
+          }}
+          className="flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-700 transition-colors"
+        >
+          <ChevronLeft className="h-4 w-4" />
+          <span className="hidden sm:inline">패턴 선택</span>
+        </button>
+
+        <p className="text-sm font-medium text-zinc-700">{selectedPattern.name}</p>
+
+        {/* 남은 시간 / 경과 시간 */}
+        <div className="flex items-center gap-1 text-xs text-zinc-400">
+          <Clock className="h-3.5 w-3.5" />
+          {isRunning || phase === 'done'
+            ? formatTime(totalElapsedSec)
+            : `${timerMinutes}분`
+          }
+        </div>
+      </div>
+
+      {/* 호흡 패턴 정보 (한줄) */}
+      <p className="text-xs text-zinc-400 mb-2">
+        들이쉬기 {selectedPattern.inhale}초
+        {selectedPattern.hold1 > 0 && ` · 멈춤 ${selectedPattern.hold1}초`}
+        {' '}· 내쉬기 {selectedPattern.exhale}초
+        {selectedPattern.hold2 > 0 && ` · 멈춤 ${selectedPattern.hold2}초`}
+      </p>
+
+      {/* 타이머 설정 (대기 중에만) */}
       {!isRunning && phase !== 'done' && (
-        <>
+        <div className="flex items-center gap-3 mb-6">
           <button
-            onClick={() => {
-              handleStop()
-              setSelectedPattern(null)
-            }}
-            className="flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-700 transition-colors"
+            onClick={() => setTimerMinutes((m) => Math.max(1, m - 1))}
+            className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center hover:bg-zinc-200 transition-colors"
           >
-            <ChevronLeft className="h-4 w-4" />
-            패턴 선택
+            <Minus className="h-3.5 w-3.5 text-zinc-500" />
           </button>
-          <Card>
-            <CardContent className="pt-4 pb-4">
-              <p className="font-semibold text-sm text-foreground">{selectedPattern.name}</p>
-              <p className="text-xs mt-0.5 text-muted-foreground">{selectedPattern.description}</p>
-              <p className="text-xs mt-1 text-muted-foreground/70">
-                들이쉬기 {selectedPattern.inhale}초
-                {selectedPattern.hold1 > 0 && ` · 멈춤 ${selectedPattern.hold1}초`}
-                {' '}· 내쉬기 {selectedPattern.exhale}초
-                {selectedPattern.hold2 > 0 && ` · 멈춤 ${selectedPattern.hold2}초`}
-                {' '}· {cycles}회
-              </p>
-              <div className="flex gap-2 mt-3">
-                {CYCLE_OPTIONS.map((c) => (
-                  <button
-                    key={c}
-                    onClick={() => setCycles(c)}
-                    className={`px-3 py-1 rounded-full text-xs transition-colors ${
-                      cycles === c
-                        ? 'bg-zinc-900 text-white'
-                        : 'bg-zinc-50 text-zinc-500 hover:bg-zinc-100'
-                    }`}
-                  >
-                    {c}회
-                  </button>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </>
+          <div className="flex gap-1.5">
+            {TIMER_OPTIONS.map((m) => (
+              <button
+                key={m}
+                onClick={() => setTimerMinutes(m)}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                  timerMinutes === m
+                    ? 'bg-zinc-900 text-white'
+                    : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200'
+                }`}
+              >
+                {m}분
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => setTimerMinutes((m) => Math.min(30, m + 1))}
+            className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center hover:bg-zinc-200 transition-colors"
+          >
+            <Plus className="h-3.5 w-3.5 text-zinc-500" />
+          </button>
+        </div>
       )}
 
-      {/* 호흡 애니메이션 */}
-      <div className="flex flex-col items-center py-10 space-y-8">
+      {/* 메인 호흡 영역 */}
+      <div className="flex-1 flex flex-col items-center justify-center w-full">
+        {/* 얼굴 일러스트 */}
+        <div className="w-28 h-28 sm:w-32 sm:h-32 mb-4">
+          <BreathingFace phase={phase} progress={phaseProgress} />
+        </div>
+
+        {/* 호흡 원 애니메이션 - 크게 */}
         <div
           className="relative flex items-center justify-center"
-          style={{ width: '260px', height: '260px' }}
+          style={{ width: '280px', height: '280px' }}
           aria-live="polite"
           aria-label={phaseLabel[phase]}
         >
+          {/* 외곽 글로우 */}
           <div
             className="absolute rounded-full"
             style={{
-              width: '180px',
-              height: '180px',
-              background: `${activeColor}08`,
+              width: '240px',
+              height: '240px',
+              background: `${activeColor}06`,
               transform: `scale(${circleScale})`,
               transition: transitionMs > 0
                 ? `transform ${transitionMs}ms ${easing}, background 0.6s ease`
                 : 'none',
-              filter: 'blur(8px)',
+              filter: 'blur(16px)',
             }}
           />
+          {/* 중간 레이어 */}
           <div
             className="absolute rounded-full"
             style={{
-              width: '180px',
-              height: '180px',
-              background: `${activeColor}14`,
+              width: '240px',
+              height: '240px',
+              background: `${activeColor}10`,
               transform: `scale(${circleScale})`,
               transition: transitionMs > 0
                 ? `transform ${transitionMs * 1.02}ms ${easing}, background 0.6s ease`
                 : 'none',
             }}
           />
+          {/* 메인 원 */}
           <div
             className="relative rounded-full flex items-center justify-center"
             style={{
-              width: '180px',
-              height: '180px',
+              width: '240px',
+              height: '240px',
               background: `radial-gradient(circle at 38% 38%, ${activeColor}dd, ${activeColor})`,
               transform: `scale(${circleScale})`,
               transition: transitionMs > 0
                 ? `transform ${transitionMs}ms ${easing}, background 0.6s ease`
                 : 'none',
               boxShadow: isRunning
-                ? `0 0 60px ${activeColor}33, 0 0 120px ${activeColor}11`
-                : `0 0 30px ${activeColor}22`,
+                ? `0 0 80px ${activeColor}33, 0 0 160px ${activeColor}11`
+                : `0 0 40px ${activeColor}22`,
             }}
           >
+            {/* 하이라이트 */}
             <div
               className="absolute rounded-full"
               style={{
@@ -362,10 +414,11 @@ export default function BreathingGuide({ initialPatternId, onSessionComplete }: 
                 pointerEvents: 'none',
               }}
             />
+            {/* 카운트다운 숫자 */}
             <span
               className="font-bold select-none relative tabular-nums"
               style={{
-                fontSize: '2.75rem',
+                fontSize: '3.5rem',
                 lineHeight: 1,
                 color: 'white',
                 textShadow: '0 2px 8px rgba(0,0,0,0.15)',
@@ -378,18 +431,24 @@ export default function BreathingGuide({ initialPatternId, onSessionComplete }: 
           </div>
         </div>
 
-        <div className="text-center space-y-1">
+        {/* 페이즈 안내 텍스트 */}
+        <div className="text-center mt-6 space-y-1">
           <p className="text-xl font-semibold text-foreground">{phaseLabel[phase]}</p>
           {isRunning && (
             <p className="text-sm text-muted-foreground">
-              {currentCycle}번째 / 총 {cycles}회
+              {completedCycles + 1}번째 사이클
             </p>
           )}
           {phase === 'done' && (
-            <p className="text-sm font-medium text-primary">호흡 훈련을 완료했습니다.</p>
+            <p className="text-sm font-medium text-primary">
+              호흡 훈련을 완료했습니다 ({completedCycles}회)
+            </p>
           )}
         </div>
+      </div>
 
+      {/* 하단 컨트롤 */}
+      <div className="w-full pt-6 pb-4 flex flex-col items-center gap-4">
         {!isRunning ? (
           <div className="flex gap-3">
             {phase === 'done' && (
@@ -425,11 +484,11 @@ export default function BreathingGuide({ initialPatternId, onSessionComplete }: 
             중단
           </Button>
         )}
-      </div>
 
-      <p className="text-xs text-zinc-400 text-center">
-        본 기능은 전문 의료인의 진단을 대체하지 않습니다.
-      </p>
+        <p className="text-xs text-zinc-400 text-center">
+          본 기능은 전문 의료인의 진단을 대체하지 않습니다.
+        </p>
+      </div>
     </div>
   )
 }

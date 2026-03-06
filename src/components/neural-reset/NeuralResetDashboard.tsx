@@ -1,48 +1,57 @@
 'use client'
 
 import Link from 'next/link'
-import { Wind, Music, BookOpen, ClipboardCheck, Award, AlertTriangle, Phone, ChevronRight, ShieldAlert, Activity, Settings, BarChart3, Calendar, HeartPulse } from 'lucide-react'
+import { Wind, Music, BookOpen, ClipboardCheck, Award, AlertTriangle, Phone, ChevronRight, Heart, Activity, Settings, BarChart3, Calendar, HeartPulse } from 'lucide-react'
 import type { DailyCheckin } from '@/types'
 import StreakDisplay from './StreakDisplay'
 import MoodCalendar from './MoodCalendar'
 import { getRecommendations, getCheckinSeverity, getCheckinSeverityLabel, getCheckinSeverityColor } from '@/lib/neural-reset/recommendations'
 
-const QUICK_TOOLS = [
+/** 핵심 도구 — 자주 사용하는 활동 */
+const CORE_TOOLS = [
   {
     href: '/app/neural-reset/breathing',
     icon: Wind,
     label: '호흡',
+    desc: '호흡 가이드',
     color: 'bg-sky-50 text-sky-600',
   },
   {
     href: '/app/neural-reset/somatic',
     icon: Activity,
     label: '소마틱',
+    desc: '신체 운동',
     color: 'bg-teal-50 text-teal-600',
   },
   {
     href: '/app/neural-reset/music',
     icon: Music,
     label: '명상음악',
+    desc: '음악 치유',
     color: 'bg-violet-50 text-violet-600',
   },
   {
     href: '/app/neural-reset/journal',
     icon: BookOpen,
     label: '감사일기',
+    desc: '마음 기록',
     color: 'bg-amber-50 text-amber-600',
   },
+]
+
+/** 부가 도구 — 측정/추적 */
+const SUB_TOOLS = [
   {
     href: '/app/neural-reset/hrv',
     icon: HeartPulse,
-    label: 'HRV',
+    label: 'HRV 측정',
     color: 'bg-rose-50 text-rose-600',
   },
   {
-    href: '/app/neural-reset/badges',
-    icon: Award,
-    label: '배지',
-    color: 'bg-pink-50 text-pink-500',
+    href: '/app/neural-reset/program',
+    icon: Calendar,
+    label: '프로그램',
+    color: 'bg-indigo-50 text-indigo-600',
   },
   {
     href: '/app/neural-reset/report',
@@ -51,10 +60,10 @@ const QUICK_TOOLS = [
     color: 'bg-blue-50 text-blue-600',
   },
   {
-    href: '/app/neural-reset/program',
-    icon: Calendar,
-    label: '프로그램',
-    color: 'bg-indigo-50 text-indigo-600',
+    href: '/app/neural-reset/badges',
+    icon: Award,
+    label: '배지',
+    color: 'bg-pink-50 text-pink-500',
   },
 ]
 
@@ -97,7 +106,7 @@ export default function NeuralResetDashboard({
   const currentMonth = now.getMonth() + 1
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {/* 헤더 */}
       <div className="flex items-center justify-between">
         <div>
@@ -117,21 +126,7 @@ export default function NeuralResetDashboard({
         </div>
       </div>
 
-      {/* SOS 긴급 안정 버튼 */}
-      <Link href="/app/neural-reset/sos" className="block">
-        <div className="rounded-xl border border-slate-200 bg-slate-900 p-3.5 flex items-center gap-3 hover:bg-slate-800 transition-colors">
-          <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center">
-            <ShieldAlert className="h-4.5 w-4.5 text-white" />
-          </div>
-          <div className="flex-1">
-            <p className="text-sm font-medium text-white">긴급 안정 모드</p>
-            <p className="text-xs text-slate-400">불안하거나 힘들 때 바로 사용하세요</p>
-          </div>
-          <ChevronRight className="h-4 w-4 text-slate-500" />
-        </div>
-      </Link>
-
-      {/* 위기 알림 */}
+      {/* 위기 알림 — 체크인 점수 crisis일 때만 */}
       {isCrisis && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-4 space-y-2">
           <div className="flex items-center gap-2 text-red-700">
@@ -160,7 +155,7 @@ export default function NeuralResetDashboard({
         </div>
       )}
 
-      {/* 오늘의 상태 */}
+      {/* 오늘의 컨디션 체크인 */}
       {todayCheckin ? (
         <div className="rounded-xl border border-zinc-100 bg-white p-4 space-y-3">
           <div className="flex items-center justify-between">
@@ -195,7 +190,6 @@ export default function NeuralResetDashboard({
               ))}
             </div>
           </div>
-          {/* 7일 미니 도트 */}
           {recentCheckins.length > 1 && (
             <div className="flex items-end gap-1 pt-1">
               {recentCheckins.map((c) => {
@@ -229,33 +223,51 @@ export default function NeuralResetDashboard({
       )}
 
       {/* 추천 활동 */}
-      <div className="space-y-2">
-        <h2 className="text-sm font-medium text-zinc-700">추천 활동</h2>
-        <div className="space-y-2">
-          {recommendations.map((rec) => (
-            <Link key={rec.route} href={rec.route as never}>
-              <div className="rounded-xl border border-zinc-100 bg-white p-3.5 flex items-center gap-3 hover:bg-zinc-50 transition-colors">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-zinc-900">{rec.title}</p>
-                  <p className="text-xs text-zinc-500 mt-0.5">{rec.description}</p>
+      {recommendations.length > 0 && (
+        <div className="space-y-2.5">
+          <h2 className="text-sm font-medium text-zinc-700">추천 활동</h2>
+          <div className="space-y-2">
+            {recommendations.map((rec) => (
+              <Link key={rec.route} href={rec.route as never}>
+                <div className="rounded-xl border border-zinc-100 bg-white p-3.5 flex items-center gap-3 hover:bg-zinc-50 transition-colors">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-zinc-900">{rec.title}</p>
+                    <p className="text-xs text-zinc-500 mt-0.5">{rec.description}</p>
+                  </div>
+                  <span className="text-xs text-zinc-400 shrink-0">{rec.duration}</span>
                 </div>
-                <span className="text-xs text-zinc-400 shrink-0">{rec.duration}</span>
-              </div>
-            </Link>
-          ))}
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 핵심 도구 (2x2 카드) */}
+      <div className="space-y-2.5">
+        <h2 className="text-sm font-medium text-zinc-700">자기 관리 도구</h2>
+        <div className="grid grid-cols-2 gap-2.5">
+          {CORE_TOOLS.map((tool) => {
+            const Icon = tool.icon
+            return (
+              <Link
+                key={tool.href}
+                href={tool.href as never}
+                className="rounded-xl border border-zinc-100 bg-white p-4 hover:bg-zinc-50 transition-colors"
+              >
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${tool.color} mb-2.5`}>
+                  <Icon className="h-5 w-5" />
+                </div>
+                <p className="text-sm font-medium text-zinc-900">{tool.label}</p>
+                <p className="text-xs text-zinc-400 mt-0.5">{tool.desc}</p>
+              </Link>
+            )
+          })}
         </div>
       </div>
 
-      {/* 스트릭 상세 */}
-      <StreakDisplay
-        currentStreak={streak.current_streak}
-        longestStreak={streak.longest_streak}
-        todayActive={todayActive}
-      />
-
-      {/* 빠른 접근 */}
+      {/* 부가 도구 (4열 아이콘 그리드) */}
       <div className="grid grid-cols-4 gap-2">
-        {QUICK_TOOLS.map((tool) => {
+        {SUB_TOOLS.map((tool) => {
           const Icon = tool.icon
           return (
             <Link
@@ -275,18 +287,40 @@ export default function NeuralResetDashboard({
         })}
       </div>
 
-      {/* 무드 캘린더 */}
-      {moodEntries.length > 0 && (
-        <div className="rounded-xl border border-zinc-100 bg-white p-4">
-          <MoodCalendar
-            entries={moodEntries}
-            year={currentYear}
-            month={currentMonth}
-          />
+      {/* 마음이 힘들 때 — 따뜻한 톤 */}
+      <Link href="/app/neural-reset/sos" className="block">
+        <div className="rounded-xl border border-amber-100 bg-gradient-to-r from-amber-50 to-orange-50 p-4 flex items-center gap-3 hover:from-amber-100/80 hover:to-orange-100/70 transition-colors">
+          <div className="w-10 h-10 rounded-xl bg-white/70 flex items-center justify-center shrink-0">
+            <Heart className="h-5 w-5 text-amber-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-amber-900">마음이 힘들 때</p>
+            <p className="text-xs text-amber-600/70 mt-0.5">잠시 멈추고 안정을 찾을 수 있도록 도와드릴게요</p>
+          </div>
+          <ChevronRight className="h-4 w-4 text-amber-400 shrink-0" />
         </div>
-      )}
+      </Link>
 
-      <p className="text-xs text-zinc-400 text-center">
+      {/* 스트릭 + 무드 캘린더 */}
+      <div className="space-y-3">
+        <StreakDisplay
+          currentStreak={streak.current_streak}
+          longestStreak={streak.longest_streak}
+          todayActive={todayActive}
+        />
+
+        {moodEntries.length > 0 && (
+          <div className="rounded-xl border border-zinc-100 bg-white p-4">
+            <MoodCalendar
+              entries={moodEntries}
+              year={currentYear}
+              month={currentMonth}
+            />
+          </div>
+        )}
+      </div>
+
+      <p className="text-xs text-zinc-400 text-center pb-2">
         본 기능은 전문 의료인의 진단을 대체하지 않습니다.
       </p>
     </div>
