@@ -20,6 +20,8 @@ export default function HRVPage() {
               pnn50: result.timeDomain.pnn50,
               confidence: result.confidenceScore,
               validBeats: result.validBeatCount,
+              arrhythmiaBurden: result.arrhythmia.burden,
+              ectopicRatio: result.arrhythmia.ectopicRatio,
             },
             duration_sec: durationSec,
             completed: true,

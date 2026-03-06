@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react'
 import Link from 'next/link'
-import { Heart, Activity, TrendingUp, Wind, ArrowLeft, RotateCcw } from 'lucide-react'
+import { Heart, Activity, TrendingUp, Wind, ArrowLeft, RotateCcw, AlertTriangle, ShieldAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -22,7 +22,7 @@ interface HRVResultsProps {
 }
 
 export default function HRVResults({ result, onRetry }: HRVResultsProps) {
-  const { timeDomain, confidenceScore, confidenceLabel, interpretation, rrIntervals } = result
+  const { timeDomain, confidenceScore, confidenceLabel, interpretation, rrIntervals, arrhythmia } = result
 
   // RR 타코그램 데이터
   const tachogramData = useMemo(() => {
@@ -48,6 +48,100 @@ export default function HRVResults({ result, onRetry }: HRVResultsProps) {
     '낮음': 'text-red-600 border-red-300',
   }[confidenceLabel]
 
+  // 부정맥으로 HRV 측정 불가인 경우
+  if (arrhythmia.burden === 'excessive') {
+    return (
+      <div className="space-y-5">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-zinc-900">측정 결과</h2>
+          <Badge variant="outline" className="text-amber-600 border-amber-300 text-xs">베타</Badge>
+        </div>
+
+        {/* 부정맥 경고 카드 */}
+        <div className="p-5 rounded-xl border border-red-200 bg-red-50 space-y-3">
+          <div className="flex items-start gap-3">
+            <ShieldAlert className="w-6 h-6 text-red-500 mt-0.5 shrink-0" />
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-red-700">
+                HRV 측정이 어렵습니다
+              </p>
+              <p className="text-xs text-red-600 leading-relaxed">
+                측정 중 비정상적인 리듬이 다수 감지되었습니다
+                (전체 박동의 {Math.round(arrhythmia.ectopicRatio * 100)}%).
+              </p>
+              <p className="text-xs text-red-600 leading-relaxed">
+                HRV(심박변이도)는 정상 동성 리듬을 기반으로 분석하는 지표이므로,
+                비정상 박동이 많은 경우 정확한 측정이 불가능합니다.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* 안내 카드 */}
+        <div className="p-4 rounded-xl border border-amber-200 bg-amber-50 space-y-2">
+          <p className="text-xs font-medium text-amber-700">참고 안내</p>
+          <ul className="text-xs text-amber-600 leading-relaxed space-y-1.5">
+            <li>
+              비정상 리듬이 반복적으로 감지된다면, 부정맥 여부를 확인하기 위해
+              전문의 상담 및 심전도(ECG) 검사를 권장합니다.
+            </li>
+            <li>
+              카페인, 수면 부족, 스트레스 등으로 일시적으로 조기수축이 늘어날 수 있습니다.
+              컨디션이 좋을 때 다시 측정해 보세요.
+            </li>
+            <li>
+              손가락 움직임으로 인한 신호 노이즈가 비정상 리듬으로 오인될 수 있습니다.
+              손가락을 가만히 유지한 상태에서 재측정해 보세요.
+            </li>
+          </ul>
+        </div>
+
+        {/* 기본 심박수 정보는 표시 */}
+        {timeDomain.meanHR > 0 && (
+          <div className="p-4 rounded-xl bg-white border border-zinc-100 shadow-sm">
+            <div className="flex items-center gap-2">
+              <Heart className="w-4 h-4 text-zinc-400" />
+              <span className="text-xs text-zinc-500">참고 평균 심박수</span>
+            </div>
+            <div className="mt-1 flex items-baseline gap-1">
+              <span className="text-2xl font-semibold text-zinc-900 tabular-nums">
+                {Math.round(timeDomain.meanHR)}
+              </span>
+              <span className="text-xs text-zinc-400">BPM</span>
+              <span className="text-xs text-zinc-400 ml-2">
+                ({timeDomain.minHR}~{timeDomain.maxHR})
+              </span>
+            </div>
+            <p className="text-xs text-zinc-400 mt-1">
+              정상 리듬 구간 {result.validBeatCount}개 비트 기준
+            </p>
+          </div>
+        )}
+
+        {/* 면책 고지 */}
+        <p className="text-xs text-zinc-400 text-center leading-relaxed">
+          본 기능은 의료기기가 아니며, 부정맥 진단 도구가 아닙니다.
+          <br />
+          정확한 진단은 반드시 전문의와 심전도 검사를 통해 확인하세요.
+        </p>
+
+        {/* 하단 액션 */}
+        <div className="flex gap-3">
+          <Link href="/app/neural-reset" className="flex-1">
+            <Button variant="outline" className="w-full">
+              <ArrowLeft className="w-4 h-4 mr-1" />
+              뉴럴리셋
+            </Button>
+          </Link>
+          <Button onClick={onRetry} className="flex-1">
+            <RotateCcw className="w-4 h-4 mr-1" />
+            다시 측정
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-5">
       {/* 헤더 */}
@@ -60,6 +154,23 @@ export default function HRVResults({ result, onRetry }: HRVResultsProps) {
           </Badge>
         </div>
       </div>
+
+      {/* 부정맥 borderline 경고 */}
+      {arrhythmia.burden === 'borderline' && (
+        <div className="p-3 rounded-xl border border-amber-200 bg-amber-50">
+          <div className="flex items-start gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-amber-700">
+                비정상 박동 일부 감지 ({Math.round(arrhythmia.ectopicRatio * 100)}%)
+              </p>
+              <p className="text-xs text-amber-600 leading-relaxed">
+                {arrhythmia.message}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 해석 카드 */}
       <div className={`p-4 rounded-xl border ${levelColor}`}>

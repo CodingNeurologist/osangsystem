@@ -29,7 +29,7 @@ import {
 import { runCalibration } from '@/lib/ppg/calibration'
 import { MotionArtifactDetector } from '@/lib/ppg/motion-artifact'
 import { CircularBuffer } from '@/lib/ppg/circular-buffer'
-import { cleanRRIntervals, getRRStats } from '@/lib/ppg/rr-artifact'
+import { cleanRRIntervals, cleanRRIntervalsWithArrhythmia, getRRStats } from '@/lib/ppg/rr-artifact'
 
 interface PPGMeasurementProps {
   onSessionComplete?: (durationSec: number, result: HRVResult) => void
@@ -354,19 +354,20 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
 
     const measureDuration = (performance.now() - startTimeRef.current) / 1000
 
-    // ★ 핵심 개선: RR 아티팩트 정제 파이프라인 적용
+    // RR 아티팩트 정제 + 부정맥 분석 파이프라인
     const rawRR = rrIntervalsRef.current
-    const cleanedRR = cleanRRIntervals(rawRR)
+    const { cleaned: cleanedRR, arrhythmia } = cleanRRIntervalsWithArrhythmia(rawRR)
     const validRR = cleanedRR.filter(r => r.isValid)
 
-    if (validRR.length < 10) {
+    // 비트 부족 체크 (부정맥 측정불가와 별개)
+    if (validRR.length < 10 && arrhythmia.burden !== 'excessive') {
       setErrorMessage(`유효 비트 부족 (${validRR.length}개). 손가락을 카메라에 밀착하고 다시 시도해 주세요.`)
       setPhase('error')
       phaseRef.current = 'error'
       return
     }
 
-    // 시간 영역 HRV (정제된 RR 사용)
+    // 시간 영역 HRV (정제된 NN 인터벌만 사용)
     const timeDomain = computeTimeDomainHRV(cleanedRR)
 
     // 주파수 영역 HRV (120비트 이상일 때만)
@@ -391,6 +392,13 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
       confidenceLabel: confidence.label,
       interpretation,
       rrIntervals: cleanedRR,
+      arrhythmia: {
+        burden: arrhythmia.burden,
+        ectopicRatio: arrhythmia.ectopicRatio,
+        ectopicCount: arrhythmia.ectopicCount,
+        hrvMeasurable: arrhythmia.hrvMeasurable,
+        message: arrhythmia.message,
+      },
     }
 
     setResult(hrvResult)

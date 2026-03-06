@@ -88,6 +88,15 @@ export interface HRVInterpretation {
   suggestion: string
 }
 
+/** 부정맥 분석 요약 (UI 표시용) */
+export interface ArrhythmiaInfo {
+  burden: 'normal' | 'borderline' | 'excessive'
+  ectopicRatio: number
+  ectopicCount: number
+  hrvMeasurable: boolean
+  message: string
+}
+
 /** HRV 최종 결과 */
 export interface HRVResult {
   timeDomain: HRVTimeDomain
@@ -99,6 +108,7 @@ export interface HRVResult {
   confidenceLabel: '높음' | '보통' | '낮음'
   interpretation: HRVInterpretation
   rrIntervals: RRInterval[]
+  arrhythmia: ArrhythmiaInfo
 }
 
 /** Butterworth 필터 상태 */
