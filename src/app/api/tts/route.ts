@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
     const cacheKey = text.trim()
     const cached = audioCache.get(cacheKey)
     if (cached) {
-      return new Response(cached.slice(0), {
+      return new Response(new Uint8Array(cached), {
         headers: {
           'Content-Type': 'audio/mpeg',
           'Cache-Control': 'public, max-age=31536000, immutable',
@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
     }
     audioCache.set(cacheKey, audioBuffer)
 
-    return new Response(audioBuffer.slice(0), {
+    return new Response(new Uint8Array(audioBuffer), {
       headers: {
         'Content-Type': 'audio/mpeg',
         'Cache-Control': 'public, max-age=31536000, immutable',
