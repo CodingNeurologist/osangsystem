@@ -4,9 +4,9 @@ const GOOGLE_TTS_URL = 'https://texttospeech.googleapis.com/v1/text:synthesize'
 const OPENAI_TTS_URL = 'https://api.openai.com/v1/audio/speech'
 
 // 간단한 인메모리 캐시 (같은 텍스트는 재생성하지 않음)
-const audioCache = new Map<string, Uint8Array>()
+const audioCache = new Map<string, ArrayBuffer>()
 
-async function generateWithGoogle(text: string, apiKey: string): Promise<Uint8Array> {
+async function generateWithGoogle(text: string, apiKey: string): Promise<ArrayBuffer> {
   const res = await fetch(`${GOOGLE_TTS_URL}?key=${apiKey}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -33,10 +33,10 @@ async function generateWithGoogle(text: string, apiKey: string): Promise<Uint8Ar
   const binary = atob(data.audioContent)
   const bytes = new Uint8Array(binary.length)
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-  return bytes
+  return bytes.buffer as ArrayBuffer
 }
 
-async function generateWithOpenAI(text: string, apiKey: string): Promise<Uint8Array> {
+async function generateWithOpenAI(text: string, apiKey: string): Promise<ArrayBuffer> {
   const res = await fetch(OPENAI_TTS_URL, {
     method: 'POST',
     headers: {
@@ -57,8 +57,7 @@ async function generateWithOpenAI(text: string, apiKey: string): Promise<Uint8Ar
     throw new Error(`OpenAI TTS failed: ${err}`)
   }
 
-  const arrayBuffer = await res.arrayBuffer()
-  return new Uint8Array(arrayBuffer)
+  return await res.arrayBuffer()
 }
 
 export async function POST(request: NextRequest) {
@@ -76,7 +75,7 @@ export async function POST(request: NextRequest) {
     const cacheKey = text.trim()
     const cached = audioCache.get(cacheKey)
     if (cached) {
-      return new NextResponse(cached, {
+      return new Response(cached.slice(0), {
         headers: {
           'Content-Type': 'audio/mpeg',
           'Cache-Control': 'public, max-age=31536000, immutable',
@@ -88,7 +87,7 @@ export async function POST(request: NextRequest) {
     const googleKey = process.env.GOOGLE_TTS_API_KEY
     const openaiKey = process.env.OPENAI_API_KEY
 
-    let audioBuffer: Uint8Array
+    let audioBuffer: ArrayBuffer
 
     if (googleKey) {
       audioBuffer = await generateWithGoogle(cacheKey, googleKey)
@@ -109,7 +108,7 @@ export async function POST(request: NextRequest) {
     }
     audioCache.set(cacheKey, audioBuffer)
 
-    return new NextResponse(audioBuffer, {
+    return new Response(audioBuffer.slice(0), {
       headers: {
         'Content-Type': 'audio/mpeg',
         'Cache-Control': 'public, max-age=31536000, immutable',
