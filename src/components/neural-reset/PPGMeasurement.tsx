@@ -271,29 +271,26 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
     // 5. 버퍼 저장
     filteredBufferRef.current.push(filtered)
 
-    // 6. 피크 검출 (아티팩트 아닐 때만)
-    if (!isArtifact) {
-      const peak = peakDetectorRef.current.processSample(
-        filtered,
-        filteredBufferRef.current,
-        sampleIndexRef.current,
-        frame.timestamp,
-      )
+    // 6. 피크 검출 (항상 수행 — 아티팩트 구간도 RR 수집 후 후처리에서 필터링)
+    const peak = peakDetectorRef.current.processSample(
+      filtered,
+      filteredBufferRef.current,
+      sampleIndexRef.current,
+      frame.timestamp,
+    )
 
-      if (peak?.isValid) {
-        const peaks = peakDetectorRef.current.getAcceptedPeaks()
-        if (peaks.length >= 2) {
-          const prevPeak = peaks[peaks.length - 2]
-          const rrMs = peak.timestamp - prevPeak.timestamp
-          // 생리학적 범위: 300ms (200BPM) ~ 2200ms (27BPM)
-          // VPC 보상 휴지기(~2000ms)도 포함해야 아티팩트 파이프라인에서 감지 가능
-          if (rrMs > 300 && rrMs < 2200) {
-            rrIntervalsRef.current.push({
-              interval: rrMs,
-              timestamp: peak.timestamp,
-              isValid: true,
-            })
-          }
+    if (peak?.isValid) {
+      const peaks = peakDetectorRef.current.getAcceptedPeaks()
+      if (peaks.length >= 2) {
+        const prevPeak = peaks[peaks.length - 2]
+        const rrMs = peak.timestamp - prevPeak.timestamp
+        // 생리학적 범위: 300ms (200BPM) ~ 2200ms (27BPM)
+        if (rrMs > 300 && rrMs < 2200) {
+          rrIntervalsRef.current.push({
+            interval: rrMs,
+            timestamp: peak.timestamp,
+            isValid: true,
+          })
         }
       }
     }
@@ -361,7 +358,7 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
     const validRR = cleanedRR.filter(r => r.isValid)
 
     // 비트 부족 체크 (부정맥 측정불가와 별개)
-    if (validRR.length < 10 && arrhythmia.burden !== 'excessive') {
+    if (validRR.length < 5 && arrhythmia.burden !== 'excessive') {
       setErrorMessage(`유효 비트 부족 (${validRR.length}개). 손가락을 카메라에 밀착하고 다시 시도해 주세요.`)
       setPhase('error')
       phaseRef.current = 'error'

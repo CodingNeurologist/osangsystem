@@ -36,11 +36,11 @@ export class AdaptivePeakDetector {
 
   constructor(config?: Partial<PeakDetectorConfig>) {
     this.config = {
-      minPeakDistance: 12,          // ~400ms at 30fps (150 BPM max)
-      adaptiveWindowSize: 90,       // 3초 윈도우 (더 안정적)
-      thresholdMultiplier: 0.8,     // 더 높은 임계 (노이즈 내성 강화)
-      refractoryPeriod: 12,         // 12샘플 (~400ms)
-      templateCorrelationMin: 0.55, // 약간 관대하게 (초기 수렴 허용)
+      minPeakDistance: 9,            // ~300ms at 30fps (200 BPM max)
+      adaptiveWindowSize: 60,       // 2초 윈도우 (더 빠른 적응)
+      thresholdMultiplier: 0.5,     // 관대한 임계 (비트 수 확보 우선)
+      refractoryPeriod: 9,          // 9샘플 (~300ms)
+      templateCorrelationMin: 0.4,  // VPC 파형 변이 허용
       ...config,
     }
     this.integrationWindow = new CircularBuffer(7)
@@ -108,13 +108,13 @@ export class AdaptivePeakDetector {
       }
     }
 
-    // 8. 진폭 일관성 체크
-    if (this.recentAmplitudes.length >= 5) {
+    // 8. 진폭 일관성 체크 (매우 관대 — VPC beat은 진폭이 크게 다를 수 있음)
+    if (this.recentAmplitudes.length >= 8) {
       const medianAmp = this.getMedianAmplitude()
       if (medianAmp > 0) {
         const ampRatio = bestVal / medianAmp
-        // 진폭이 중앙값의 0.3배 미만이거나 3배 이상이면 거부
-        if (ampRatio < 0.3 || ampRatio > 3.0) {
+        // 극단적 이상치만 거부 (0.15배 미만 또는 5배 이상)
+        if (ampRatio < 0.15 || ampRatio > 5.0) {
           return null
         }
       }
@@ -176,9 +176,9 @@ export class AdaptivePeakDetector {
 
     const sorted = [...this.recentRR].sort((a, b) => a - b)
     const medianRR = sorted[Math.floor(sorted.length / 2)]
-    // 중앙값 RR의 40%를 불응기로 (ms → 샘플 수)
-    // 30fps 기준: 800ms median → 800*0.4/33.3 = ~9.6 샘플
-    const adaptiveSamples = Math.floor(medianRR * 0.4 / 33.3)
+    // 중앙값 RR의 30%를 불응기로 (VPC 커플링 ~600ms 허용)
+    // 30fps 기준: 800ms median → 800*0.3/33.3 = ~7.2 샘플
+    const adaptiveSamples = Math.floor(medianRR * 0.3 / 33.3)
     return Math.max(this.config.refractoryPeriod, adaptiveSamples)
   }
 

@@ -97,36 +97,35 @@ export class MotionArtifactDetector {
       return false
     }
 
-    // ── 기준 1: 분산 기반 ──
+    // ── 기준 1: 분산 기반 (관대하게 — VPC 신호는 자연 변동성이 높음) ──
     const variance = this.rawBuffer.varianceLastN(this.windowSize)
     const varianceArtifact = this.baselineVariance > 0 &&
-      variance > this.baselineVariance * 2.5
+      variance > this.baselineVariance * 5.0
 
     // ── 기준 2: 급격한 진폭 변화 (미분 기반) ──
     const recentDerivMean = this.derivBuffer.meanLastN(this.windowSize)
     const derivArtifact = this.baselineDeriv > 0 &&
-      recentDerivMean > this.baselineDeriv * 3.0
+      recentDerivMean > this.baselineDeriv * 5.0
 
-    // ── 기준 3: 가속도 기반 ──
-    const motionArtifact = this.accelMagnitude > 1.2
+    // ── 기준 3: 가속도 기반 (실제 물리적 움직임만) ──
+    const motionArtifact = this.accelMagnitude > 2.0
 
-    // ── 기준 4: Red-Green 상관 (움직임 시 둘 다 같이 변함) ──
+    // ── 기준 4: Red-Green 상관 (높은 임계 — 확실한 움직임만) ──
     let rgCorrelationArtifact = false
     if (rawGreen !== undefined && this.greenBuffer.length >= this.windowSize) {
       const rgCorr = this.computeRGCorrelation()
-      // 정상 PPG: Red와 Green은 반상관 또는 약한 상관
-      // 움직임: 둘 다 같은 방향으로 크게 변함 → 강한 양의 상관
-      rgCorrelationArtifact = rgCorr > 0.7
+      rgCorrelationArtifact = rgCorr > 0.85
     }
 
-    const isArtifact = varianceArtifact || derivArtifact ||
-      motionArtifact || rgCorrelationArtifact
+    // 최소 2개 기준 동시 충족 시에만 아티팩트 (단일 기준 오탐 방지)
+    const criteriaHit = [varianceArtifact, derivArtifact, motionArtifact, rgCorrelationArtifact]
+      .filter(Boolean).length
+    const isArtifact = criteriaHit >= 2
 
     if (isArtifact) {
       this.artifactCount++
-      this.consecutiveArtifactFrames = this.ARTIFACT_HOLDOFF
+      this.consecutiveArtifactFrames = 3 // 홀드오프 5→3 축소
     } else if (this.consecutiveArtifactFrames > 0) {
-      // 홀드오프: 아티팩트 직후 수 프레임도 무효 (잔여 진동)
       this.consecutiveArtifactFrames--
       this.artifactCount++
       return true
