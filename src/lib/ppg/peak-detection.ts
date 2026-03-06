@@ -2,14 +2,15 @@ import type { DetectedPeak, PeakDetectorConfig } from './types'
 import { CircularBuffer } from './circular-buffer'
 
 /**
- * 적응형 PPG 피크 검출기 (Pan-Tompkins 변형).
+ * 적응형 PPG 피크 검출기 (Pan-Tompkins 변형 + 강화된 아티팩트 내성).
  *
- * 알고리즘:
- * 1. 1차 미분 → 제곱 → 이동적분 (5샘플)
- * 2. 적응 임계값 = mean + k × std (윈도우 60샘플)
- * 3. 불응기 (9샘플 ≈ 300ms at 30fps)
- * 4. 원신호 역추적으로 실제 수축기 피크 위치 결정
- * 5. 5비트 이후 템플릿 매칭 검증 (Pearson r > threshold)
+ * v2 개선사항:
+ * - 적응 임계값 multiplier 상향 (0.6 → 0.8)
+ * - 불응기 증가 (9 → 12 샘플 = ~400ms at 30fps)
+ * - 이동적분 윈도우 확대 (5 → 7 샘플)
+ * - 진폭 일관성 체크 추가
+ * - 더 넓은 역추적 윈도우 (8 → 12)
+ * - 이전 RR 기반 예측적 불응기
  */
 export class AdaptivePeakDetector {
   private config: PeakDetectorConfig
@@ -19,26 +20,32 @@ export class AdaptivePeakDetector {
   private integratedBuffer: CircularBuffer
   // 적응 임계값 추적
   private lastPeakSampleIndex: number = -Infinity
+  private lastPeakTimestamp: number = 0
   // 템플릿 매칭
   private templateSum: Float64Array | null = null
   private templateCount: number = 0
-  private readonly TEMPLATE_HALF_WIDTH = 10 // 피크 좌우 10샘플 (총 21샘플)
+  private readonly TEMPLATE_HALF_WIDTH = 10
   // 결과
   private peaks: DetectedPeak[] = []
   // 최근 템플릿 상관계수 (SQI용)
   private recentCorrelations: number[] = []
+  // 최근 유효 RR 인터벌 (예측적 불응기용)
+  private recentRR: number[] = []
+  // 최근 피크 진폭 (진폭 일관성 체크용)
+  private recentAmplitudes: CircularBuffer
 
   constructor(config?: Partial<PeakDetectorConfig>) {
     this.config = {
-      minPeakDistance: 9,
-      adaptiveWindowSize: 60,
-      thresholdMultiplier: 0.6,
-      refractoryPeriod: 9,
-      templateCorrelationMin: 0.6,
+      minPeakDistance: 12,          // ~400ms at 30fps (150 BPM max)
+      adaptiveWindowSize: 90,       // 3초 윈도우 (더 안정적)
+      thresholdMultiplier: 0.8,     // 더 높은 임계 (노이즈 내성 강화)
+      refractoryPeriod: 12,         // 12샘플 (~400ms)
+      templateCorrelationMin: 0.55, // 약간 관대하게 (초기 수렴 허용)
       ...config,
     }
-    this.integrationWindow = new CircularBuffer(5)
+    this.integrationWindow = new CircularBuffer(7)
     this.integratedBuffer = new CircularBuffer(this.config.adaptiveWindowSize)
+    this.recentAmplitudes = new CircularBuffer(20)
   }
 
   /**
@@ -57,15 +64,15 @@ export class AdaptivePeakDetector {
     // 2. 제곱
     const squared = derivative * derivative
 
-    // 3. 이동적분 (5샘플)
+    // 3. 이동적분 (7샘플)
     this.integrationWindow.push(squared)
     const integrated = this.integrationWindow.meanLastN(
-      Math.min(5, this.integrationWindow.length),
+      Math.min(7, this.integrationWindow.length),
     )
     this.integratedBuffer.push(integrated)
 
     // 충분한 데이터 없으면 스킵
-    if (this.integratedBuffer.length < 20) return null
+    if (this.integratedBuffer.length < 30) return null
 
     // 4. 적응 임계값
     const windowSize = Math.min(this.config.adaptiveWindowSize, this.integratedBuffer.length)
@@ -73,23 +80,22 @@ export class AdaptivePeakDetector {
     const std = this.integratedBuffer.stdLastN(windowSize)
     const threshold = mean + this.config.thresholdMultiplier * std
 
-    // 5. 피크 후보 검사
-    // 현재 적분값이 임계값 초과 + 이전 2샘플보다 큰 국소 최대
+    // 5. 피크 후보 검사 (3-포인트 국소 최대)
     const current = this.integratedBuffer.get(this.integratedBuffer.length - 1)
     const prev1 = this.integratedBuffer.get(this.integratedBuffer.length - 2)
     const prev2 = this.integratedBuffer.get(this.integratedBuffer.length - 3)
 
-    const isAboveThreshold = current > threshold
-    // 적분신호에서 하강 시작점 감지 (prev1이 극대)
+    const isAboveThreshold = prev1 > threshold
     const isLocalMax = prev1 > prev2 && prev1 >= current
 
     if (!isAboveThreshold || !isLocalMax) return null
 
-    // 6. 불응기 확인
-    if (sampleIndex - this.lastPeakSampleIndex < this.config.refractoryPeriod) return null
+    // 6. 불응기 확인 (고정 + 예측적)
+    const adaptiveRefractory = this.getAdaptiveRefractory()
+    if (sampleIndex - this.lastPeakSampleIndex < adaptiveRefractory) return null
 
-    // 7. 원 필터 신호에서 실제 피크 역추적 (최근 8샘플 중 최대)
-    const searchBack = 8
+    // 7. 원 필터 신호에서 실제 피크 역추적 (최근 12샘플 중 최대)
+    const searchBack = 12
     let bestIdx = sampleIndex
     let bestVal = -Infinity
     for (let i = 0; i < searchBack; i++) {
@@ -102,12 +108,23 @@ export class AdaptivePeakDetector {
       }
     }
 
-    // 8. 템플릿 매칭 검증
+    // 8. 진폭 일관성 체크
+    if (this.recentAmplitudes.length >= 5) {
+      const medianAmp = this.getMedianAmplitude()
+      if (medianAmp > 0) {
+        const ampRatio = bestVal / medianAmp
+        // 진폭이 중앙값의 0.3배 미만이거나 3배 이상이면 거부
+        if (ampRatio < 0.3 || ampRatio > 3.0) {
+          return null
+        }
+      }
+    }
+
+    // 9. 템플릿 매칭 검증
     let isValid = true
     const halfW = this.TEMPLATE_HALF_WIDTH
 
     if (this.templateCount >= 5) {
-      // 현재 파형 추출
       const waveform = this.extractWaveform(filteredBuffer, halfW)
       if (waveform) {
         const template = this.getTemplate()
@@ -129,13 +146,52 @@ export class AdaptivePeakDetector {
     }
 
     if (isValid) {
+      // RR 인터벌 기록
+      if (this.lastPeakTimestamp > 0) {
+        const rr = timestamp - this.lastPeakTimestamp
+        if (rr > 300 && rr < 2000) {
+          this.recentRR.push(rr)
+          if (this.recentRR.length > 10) this.recentRR.shift()
+        }
+      }
+
       this.lastPeakSampleIndex = sampleIndex
+      this.lastPeakTimestamp = timestamp
       this.peaks.push(peak)
+      this.recentAmplitudes.push(bestVal)
+
       // 템플릿 업데이트
       this.updateTemplate(filteredBuffer, halfW)
     }
 
     return peak
+  }
+
+  /**
+   * 예측적 불응기: 최근 RR 인터벌 중앙값의 40% (최소 기본값).
+   * 심박이 안정적이면 정확한 불응기 설정 가능.
+   */
+  private getAdaptiveRefractory(): number {
+    if (this.recentRR.length < 3) return this.config.refractoryPeriod
+
+    const sorted = [...this.recentRR].sort((a, b) => a - b)
+    const medianRR = sorted[Math.floor(sorted.length / 2)]
+    // 중앙값 RR의 40%를 불응기로 (ms → 샘플 수)
+    // 30fps 기준: 800ms median → 800*0.4/33.3 = ~9.6 샘플
+    const adaptiveSamples = Math.floor(medianRR * 0.4 / 33.3)
+    return Math.max(this.config.refractoryPeriod, adaptiveSamples)
+  }
+
+  /** 최근 진폭의 중앙값 */
+  private getMedianAmplitude(): number {
+    const n = this.recentAmplitudes.length
+    if (n === 0) return 0
+    const values: number[] = []
+    for (let i = 0; i < n; i++) {
+      values.push(this.recentAmplitudes.get(i))
+    }
+    values.sort((a, b) => a - b)
+    return values[Math.floor(values.length / 2)]
   }
 
   /** 유효한 피크 목록 */
@@ -172,7 +228,7 @@ export class AdaptivePeakDetector {
     return template
   }
 
-  /** 러닝 평균 템플릿 업데이트 */
+  /** 지수 가중 이동 평균 템플릿 업데이트 */
   private updateTemplate(buffer: CircularBuffer, halfWidth: number): void {
     const waveform = this.extractWaveform(buffer, halfWidth)
     if (!waveform) return
@@ -181,18 +237,28 @@ export class AdaptivePeakDetector {
     if (!this.templateSum) {
       this.templateSum = new Float64Array(len)
     }
-    for (let i = 0; i < len; i++) {
-      this.templateSum[i] += waveform[i]
+
+    // 지수 이동 평균 (alpha = 0.15)
+    const alpha = 0.15
+    if (this.templateCount === 0) {
+      // 첫 번째 템플릿
+      for (let i = 0; i < len; i++) {
+        this.templateSum[i] = waveform[i]
+      }
+    } else {
+      for (let i = 0; i < len; i++) {
+        this.templateSum[i] = (1 - alpha) * this.templateSum[i] + alpha * waveform[i] * this.templateCount
+      }
     }
     this.templateCount++
 
-    // 오래된 템플릿 페이드 아웃 (최근 20비트에 가중)
-    if (this.templateCount > 20) {
-      const decay = 20 / this.templateCount
+    // 노멀라이즈
+    if (this.templateCount > 15) {
+      const decay = 15 / this.templateCount
       for (let i = 0; i < len; i++) {
         this.templateSum[i] *= decay
       }
-      this.templateCount = 20
+      this.templateCount = 15
     }
   }
 
@@ -225,9 +291,12 @@ export class AdaptivePeakDetector {
     this.integrationWindow.clear()
     this.integratedBuffer.clear()
     this.lastPeakSampleIndex = -Infinity
+    this.lastPeakTimestamp = 0
     this.templateSum = null
     this.templateCount = 0
     this.peaks = []
     this.recentCorrelations = []
+    this.recentRR = []
+    this.recentAmplitudes.clear()
   }
 }

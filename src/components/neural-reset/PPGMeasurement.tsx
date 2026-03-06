@@ -17,7 +17,7 @@ import type {
 } from '@/lib/ppg/types'
 import { DEFAULT_PPG_CONFIG } from '@/lib/ppg/types'
 import { initCamera, isCameraSupported, type CameraController } from '@/lib/ppg/camera'
-import { BandpassFilter, BaselineRemover } from '@/lib/ppg/filters'
+import { BandpassFilter4thOrder, BaselineRemover, AdaptiveNoiseCanceller } from '@/lib/ppg/filters'
 import { AdaptivePeakDetector } from '@/lib/ppg/peak-detection'
 import { computeSQI } from '@/lib/ppg/signal-quality'
 import {
@@ -29,6 +29,7 @@ import {
 import { runCalibration } from '@/lib/ppg/calibration'
 import { MotionArtifactDetector } from '@/lib/ppg/motion-artifact'
 import { CircularBuffer } from '@/lib/ppg/circular-buffer'
+import { cleanRRIntervals, getRRStats } from '@/lib/ppg/rr-artifact'
 
 interface PPGMeasurementProps {
   onSessionComplete?: (durationSec: number, result: HRVResult) => void
@@ -45,6 +46,7 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
   const [result, setResult] = useState<HRVResult | null>(null)
   const [torchWarning, setTorchWarning] = useState(false)
   const [debugInfo, setDebugInfo] = useState({ red: 0, green: 0, ac: 0, fps: 0 })
+  const [artifactRatio, setArtifactRatio] = useState(0)
 
   // ── Ref (실시간 데이터, React 렌더링 회피) ──────────
   const cameraRef = useRef<CameraController | null>(null)
@@ -58,16 +60,19 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
   const frameCountRef = useRef(0)
   const fpsTimerRef = useRef(0)
 
-  // DSP 모듈
+  // DSP 모듈 (v2: 4차 필터 + 적응형 노이즈 캔슬러)
   const signalBufferRef = useRef(new CircularBuffer(DEFAULT_PPG_CONFIG.bufferSize))
   const filteredBufferRef = useRef(new CircularBuffer(DEFAULT_PPG_CONFIG.bufferSize))
-  const bandpassRef = useRef(new BandpassFilter(0.5, 4.0, DEFAULT_PPG_CONFIG.sampleRate))
+  const bandpassRef = useRef(new BandpassFilter4thOrder(0.7, 3.5, DEFAULT_PPG_CONFIG.sampleRate))
   const baselineRef = useRef(new BaselineRemover(300))
+  const ancRef = useRef(new AdaptiveNoiseCanceller(12, 0.05))
   const peakDetectorRef = useRef(new AdaptivePeakDetector())
   const motionDetectorRef = useRef(new MotionArtifactDetector())
   const rrIntervalsRef = useRef<RRInterval[]>([])
   const calibrationRef = useRef<CalibrationState>({ samples: [], timestamps: [], startTime: 0 })
   const calibrationAttemptRef = useRef(0)
+  // Green 채널 캘리브레이션 샘플
+  const greenSamplesRef = useRef<number[]>([])
 
   const cameraSupported = typeof window !== 'undefined' ? isCameraSupported() : true
 
@@ -108,7 +113,7 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
       // 가속도계 초기화
       motionDetectorRef.current.initAccelerometer()
 
-      // signalBuffer 초기화 (보정 중에도 파형 표시용)
+      // signalBuffer 초기화
       signalBufferRef.current.clear()
       filteredBufferRef.current.clear()
 
@@ -121,6 +126,7 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
         timestamps: [],
         startTime: performance.now(),
       }
+      greenSamplesRef.current = []
       calibrationAttemptRef.current = 0
       frameCountRef.current = 0
       fpsTimerRef.current = performance.now()
@@ -168,6 +174,7 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
     if (phaseRef.current === 'calibrating') {
       calibrationRef.current.samples.push(frame.redMean)
       calibrationRef.current.timestamps.push(frame.timestamp)
+      greenSamplesRef.current.push(frame.greenMean)
 
       const calibElapsed = (frame.timestamp - calibrationRef.current.startTime) / 1000
       setElapsed(Math.floor(calibElapsed))
@@ -178,7 +185,6 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
         const fpsDt = (now - fpsTimerRef.current) / 1000
         const fps = fpsDt > 0 ? frameCountRef.current / fpsDt : 0
 
-        // AC 비율 간이 계산
         const recentSamples = calibrationRef.current.samples.slice(-30)
         const mean = recentSamples.reduce((a, b) => a + b, 0) / recentSamples.length
         let acSum = 0
@@ -199,16 +205,25 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
 
         if (calResult.isValid) {
           // 보정 성공 → 측정 시작
-          motionDetectorRef.current.setBaselineVariance(
+          // 기준값 설정 (분산 + 미분 기준)
+          motionDetectorRef.current.setBaseline(
             calResult.noiseFloor * calResult.noiseFloor,
+            calResult.noiseFloor,
           )
+
           // DSP 초기화
           signalBufferRef.current.clear()
           filteredBufferRef.current.clear()
-          bandpassRef.current.reset()
-          baselineRef.current.reset()
+          bandpassRef.current = new BandpassFilter4thOrder(0.7, 3.5, DEFAULT_PPG_CONFIG.sampleRate)
+          baselineRef.current = new BaselineRemover(300)
+          ancRef.current = new AdaptiveNoiseCanceller(12, 0.05)
           peakDetectorRef.current.reset()
           motionDetectorRef.current.reset()
+          // 기준값 재설정 (reset이 초기화하므로)
+          motionDetectorRef.current.setBaseline(
+            calResult.noiseFloor * calResult.noiseFloor,
+            calResult.noiseFloor,
+          )
           rrIntervalsRef.current = []
           sampleIndexRef.current = 0
 
@@ -217,7 +232,7 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
           startTimeRef.current = performance.now()
           setElapsed(0)
         } else {
-          // 재시도 (최대 5회로 증가)
+          // 재시도 (최대 5회)
           calibrationAttemptRef.current++
           if (calibrationAttemptRef.current >= 5) {
             phaseRef.current = 'error'
@@ -226,12 +241,12 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
             cleanup()
             return
           }
-          // 보정 리셋 (signalBuffer는 유지하여 파형 계속 표시)
           calibrationRef.current = {
             samples: [],
             timestamps: [],
             startTime: performance.now(),
           }
+          greenSamplesRef.current = []
         }
       }
 
@@ -240,18 +255,23 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
     }
 
     // ── 측정 단계 ───
-    // 움직임 아티팩트 감지
-    const isArtifact = motionDetectorRef.current.processSample(frame.redMean)
 
-    // 기저선 제거
-    const detrended = baselineRef.current.process(frame.redMean)
-    // 밴드패스 필터
+    // 1. 적응형 노이즈 캔슬러 (Green → Red 모션 제거)
+    const denoised = ancRef.current.process(frame.redMean, frame.greenMean)
+
+    // 2. 움직임 아티팩트 감지 (Red + Green 모두 활용)
+    const isArtifact = motionDetectorRef.current.processSample(frame.redMean, frame.greenMean)
+
+    // 3. 기저선 제거
+    const detrended = baselineRef.current.process(denoised)
+
+    // 4. 4차 Butterworth 밴드패스 필터 (0.7-3.5 Hz)
     const filtered = bandpassRef.current.process(detrended)
 
-    // 버퍼 저장
+    // 5. 버퍼 저장
     filteredBufferRef.current.push(filtered)
 
-    // 피크 검출
+    // 6. 피크 검출 (아티팩트 아닐 때만)
     if (!isArtifact) {
       const peak = peakDetectorRef.current.processSample(
         filtered,
@@ -265,8 +285,8 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
         if (peaks.length >= 2) {
           const prevPeak = peaks[peaks.length - 2]
           const rrMs = peak.timestamp - prevPeak.timestamp
-          // 생리학적 범위 검증: 300ms (200BPM) ~ 2000ms (30BPM)
-          if (rrMs > 300 && rrMs < 2000) {
+          // 생리학적 범위: 333ms (180BPM) ~ 1500ms (40BPM)
+          if (rrMs > 333 && rrMs < 1500) {
             rrIntervalsRef.current.push({
               interval: rrMs,
               timestamp: peak.timestamp,
@@ -284,11 +304,14 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
       const measureElapsed = (performance.now() - startTimeRef.current) / 1000
       setElapsed(Math.floor(measureElapsed))
 
-      // BPM (최근 10 RR 인터벌)
-      const recentRR = rrIntervalsRef.current.slice(-10).filter(r => r.isValid)
+      // BPM: 실시간 RR 아티팩트 필터 적용 후 중앙값 기반
+      const recentRR = rrIntervalsRef.current.slice(-15)
       if (recentRR.length >= 3) {
-        const avgRR = recentRR.reduce((s, r) => s + r.interval, 0) / recentRR.length
-        setCurrentBPM(Math.round(60000 / avgRR))
+        const cleaned = cleanRRIntervals(recentRR)
+        const stats = getRRStats(cleaned)
+        if (stats.medianHR > 0) {
+          setCurrentBPM(stats.medianHR)
+        }
       }
 
       // SQI
@@ -299,6 +322,9 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
         peakDetectorRef.current.getRecentCorrelations(),
       )
       setSqiScore(sqi.score)
+
+      // 아티팩트 비율
+      setArtifactRatio(Math.round(motionDetectorRef.current.getArtifactRatio() * 100))
 
       // 디버그 정보
       const now = performance.now()
@@ -327,7 +353,11 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
     cleanup()
 
     const measureDuration = (performance.now() - startTimeRef.current) / 1000
-    const validRR = rrIntervalsRef.current.filter(r => r.isValid)
+
+    // ★ 핵심 개선: RR 아티팩트 정제 파이프라인 적용
+    const rawRR = rrIntervalsRef.current
+    const cleanedRR = cleanRRIntervals(rawRR)
+    const validRR = cleanedRR.filter(r => r.isValid)
 
     if (validRR.length < 10) {
       setErrorMessage(`유효 비트 부족 (${validRR.length}개). 손가락을 카메라에 밀착하고 다시 시도해 주세요.`)
@@ -336,36 +366,37 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
       return
     }
 
-    // 시간 영역 HRV
-    const timeDomain = computeTimeDomainHRV(rrIntervalsRef.current)
+    // 시간 영역 HRV (정제된 RR 사용)
+    const timeDomain = computeTimeDomainHRV(cleanedRR)
 
     // 주파수 영역 HRV (120비트 이상일 때만)
-    const frequencyDomain = computeFrequencyDomainHRV(rrIntervalsRef.current)
+    const frequencyDomain = computeFrequencyDomainHRV(cleanedRR)
 
     // 해석
     const interpretation = interpretHRV(timeDomain)
 
     // 신뢰도
     const cleanRatio = motionDetectorRef.current.getCleanRatio()
-    const confidence = computeConfidence(validRR.length, cleanRatio, measureDuration)
+    const rrStats = getRRStats(cleanedRR)
+    const effectiveCleanRatio = Math.min(cleanRatio, 1 - rrStats.rejectionRate)
+    const confidence = computeConfidence(validRR.length, effectiveCleanRatio, measureDuration)
 
     const hrvResult: HRVResult = {
       timeDomain,
       frequencyDomain,
       measurementDuration: Math.round(measureDuration),
-      cleanSignalRatio: Math.round(cleanRatio * 100) / 100,
+      cleanSignalRatio: Math.round(effectiveCleanRatio * 100) / 100,
       validBeatCount: validRR.length,
       confidenceScore: confidence.score,
       confidenceLabel: confidence.label,
       interpretation,
-      rrIntervals: rrIntervalsRef.current,
+      rrIntervals: cleanedRR,
     }
 
     setResult(hrvResult)
     setPhase('results')
     phaseRef.current = 'results'
 
-    // 세션 기록
     onSessionComplete?.(Math.round(measureDuration), hrvResult)
   }, [cleanup, onSessionComplete])
 
@@ -393,15 +424,14 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
     setSqiScore(0)
     setTorchWarning(false)
     setDebugInfo({ red: 0, green: 0, ac: 0, fps: 0 })
+    setArtifactRatio(0)
   }, [cleanup])
 
-  // 카메라가 활성화된 단계인지 여부 (permission부터 보여야 video.play() 동작)
   const showCamera = phase === 'permission' || phase === 'calibrating' || phase === 'measuring'
 
   // ── 렌더링 ─────────────────────────────────────────
   return (
     <div className="space-y-4">
-      {/* 뒤로가기 (측정 중이 아닐 때) */}
       {(phase === 'idle' || phase === 'results' || phase === 'error') && (
         <Link
           href="/app/neural-reset"
@@ -412,10 +442,6 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
         </Link>
       )}
 
-      {/*
-        비디오: display:none 대신 높이/투명도로 숨김.
-        display:none이면 일부 브라우저에서 video.play()가 작동하지 않음.
-      */}
       <div
         className="transition-all duration-300 overflow-hidden"
         style={{
@@ -431,7 +457,6 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
             muted
             autoPlay
           />
-          {/* 카메라 위 디버그 오버레이 */}
           {(phase === 'calibrating' || phase === 'measuring') && (
             <div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-[192px] bg-black/60 rounded-lg px-2 py-1 text-[10px] text-white font-mono tabular-nums flex justify-between">
               <span>R:{debugInfo.red}</span>
@@ -442,7 +467,6 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
           )}
         </div>
       </div>
-      {/* 캔버스: 픽셀 추출 전용. 크기 0으로 숨기되 display:none 사용 안 함 */}
       <canvas ref={canvasRef} style={{ position: 'absolute', width: 0, height: 0, opacity: 0, pointerEvents: 'none' }} />
 
       {/* ─── idle: 안내 화면 ─── */}
@@ -490,7 +514,6 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
             </span>
           </div>
 
-          {/* 보정 중에도 raw 신호 파형 표시 */}
           <PPGWaveform
             signalBuffer={signalBufferRef.current}
             isActive={true}
@@ -509,7 +532,6 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
       {/* ─── measuring: 측정 중 ─── */}
       {phase === 'measuring' && (
         <div className="space-y-4 py-2">
-          {/* 상단 정보 */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="text-amber-600 border-amber-300 text-xs">베타</Badge>
@@ -520,7 +542,6 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
             <SQIIndicator score={sqiScore} />
           </div>
 
-          {/* 진행률 */}
           <Progress
             value={(elapsed / DEFAULT_PPG_CONFIG.measurementDuration) * 100}
             className="h-1.5"
@@ -549,10 +570,21 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
           {/* 상태 정보 */}
           <div className="flex justify-between text-xs text-zinc-400 tabular-nums">
             <span>유효 비트: {rrIntervalsRef.current.filter(r => r.isValid).length}</span>
-            <span>R:{debugInfo.red} | SQI:{sqiScore}%</span>
+            <span>
+              SQI:{sqiScore}%
+              {artifactRatio > 10 && (
+                <span className="text-amber-500 ml-1">| 노이즈:{artifactRatio}%</span>
+              )}
+            </span>
           </div>
 
-          {/* 중지 버튼 */}
+          {/* 움직임 경고 */}
+          {artifactRatio > 30 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-700 text-center">
+              움직임이 감지되고 있습니다. 손가락을 가만히 유지해 주세요.
+            </div>
+          )}
+
           <Button
             variant="outline"
             onClick={handleStop}
