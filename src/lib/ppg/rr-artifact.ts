@@ -1,99 +1,121 @@
 import type { RRInterval } from './types'
 
 // ============================================================
-// RR 인터벌 이소성 박동 감지 및 부정맥 분석
+// RR 인터벌 아티팩트 제거 + 이소성 박동 감지
 // ============================================================
-//
-// 핵심 원리:
-// VPC(심실 조기수축) 시 RR 인터벌 패턴:
-//   ...950, 950, [2000], 950, 950...   ← 보상 휴지기 (피크 검출기가 VPC beat을 놓친 경우)
-//   ...950, [600, 1400], 950...         ← 커플링 + 보상 (VPC beat이 검출된 경우)
-//
-// 두 경우 모두 주변 정상 인터벌 대비 급격한 편차를 보인다.
-// "isolated spike" (고립 스파이크) 감지가 가장 효과적.
-//
 
 /**
- * 전역 중앙값(Global Median) 계산.
+ * 중앙값 계산.
  */
-function computeMedian(values: number[]): number {
+function median(values: number[]): number {
   if (values.length === 0) return 0
   const sorted = [...values].sort((a, b) => a - b)
-  return sorted[Math.floor(sorted.length / 2)]
+  const mid = Math.floor(sorted.length / 2)
+  return sorted.length % 2 === 0
+    ? (sorted[mid - 1] + sorted[mid]) / 2
+    : sorted[mid]
 }
 
 /**
- * 1단계: 전역 중앙값 기반 1차 필터.
- *
- * 전체 RR 인터벌의 중앙값을 구한 후,
- * 중앙값에서 ±35% 벗어나는 인터벌을 무효화.
- *
- * 이 단계에서 극단적 아웃라이어를 먼저 제거해야
- * 이후 로컬 분석의 정확도가 높아진다.
+ * MAD (Median Absolute Deviation) — 아웃라이어에 강건한 산포도.
+ * σ ≈ 1.4826 × MAD (정규분포 가정 시)
  */
-function filterByGlobalMedian(
-  rrIntervals: RRInterval[],
-  threshold: number = 0.35,
-): RRInterval[] {
-  const validValues = rrIntervals.filter(r => r.isValid).map(r => r.interval)
-  if (validValues.length < 3) return rrIntervals
-
-  const median = computeMedian(validValues)
-
-  return rrIntervals.map(rr => {
-    if (!rr.isValid) return rr
-
-    const deviation = Math.abs(rr.interval - median) / median
-    if (deviation > threshold) {
-      return { ...rr, isValid: false }
-    }
-    return rr
-  })
+function mad(values: number[]): number {
+  const med = median(values)
+  const deviations = values.map(v => Math.abs(v - med))
+  return median(deviations)
 }
 
+// ============================================================
+// 1단계: MAD 기반 강건 필터 (반복 적용)
+// ============================================================
+
 /**
- * 2단계: 고립 스파이크 감지 (Isolated Spike Detection).
+ * 중앙값 ± k × MAD 범위 밖의 인터벌을 무효화.
+ * MAD는 아웃라이어가 50% 미만이면 오염되지 않으므로
+ * VPC가 많아도 안전하다.
  *
- * VPC의 핵심 패턴: 하나의 인터벌만 주변보다 크게 튀어나옴.
- *
- * 각 인터벌 i에 대해:
- * - 양쪽 이웃(i-1, i+1)이 모두 유효하고
- * - 양쪽 이웃이 서로 비슷하고 (±20%)
- * - 현재 값이 양쪽 이웃의 평균에서 >25% 벗어나면
- * → 이소성 박동(VPC)으로 판정
- *
- * 이 방법은 중앙값 윈도우 방식보다 훨씬 정확하다:
- * - 단일 스파이크를 정확히 잡아냄
- * - 정상적인 점진적 HR 변화는 보존
- * - VPC 빈도에 영향받지 않음
+ * k=3.0 → 정규분포 기준 약 99.7% 범위 (보수적)
+ * 반복 적용하면 점점 정밀해짐.
+ */
+function filterByMAD(
+  rrIntervals: RRInterval[],
+  k: number,
+): { result: RRInterval[]; removedIndices: number[] } {
+  const result = rrIntervals.map(rr => ({ ...rr }))
+  const removedIndices: number[] = []
+
+  const validValues = result.filter(r => r.isValid).map(r => r.interval)
+  if (validValues.length < 5) return { result, removedIndices }
+
+  const med = median(validValues)
+  const madVal = mad(validValues)
+
+  // MAD가 매우 작으면 (거의 같은 값) 비율 기반 폴백
+  const threshold = madVal > 0
+    ? Math.max(k * 1.4826 * madVal, med * 0.15)  // 최소 15% 허용
+    : med * 0.25
+
+  const lower = med - threshold
+  const upper = med + threshold
+
+  for (let i = 0; i < result.length; i++) {
+    if (!result[i].isValid) continue
+    if (result[i].interval < lower || result[i].interval > upper) {
+      result[i].isValid = false
+      removedIndices.push(i)
+    }
+  }
+
+  return { result, removedIndices }
+}
+
+// ============================================================
+// 2단계: 고립 스파이크 감지
+// ============================================================
+
+/**
+ * 양쪽 이웃이 비슷한데 현재값만 튀는 패턴.
+ * 이웃이 무효여도 유효한 가장 가까운 이웃을 찾아 비교.
  */
 function detectIsolatedSpikes(
   rrIntervals: RRInterval[],
-  spikeThreshold: number = 0.25,
-  neighborSimilarity: number = 0.20,
+  spikeThreshold: number,
 ): { result: RRInterval[]; spikeIndices: number[] } {
   const result = rrIntervals.map(rr => ({ ...rr }))
   const spikeIndices: number[] = []
 
-  for (let i = 1; i < result.length - 1; i++) {
+  for (let i = 0; i < result.length; i++) {
     if (!result[i].isValid) continue
 
-    const prev = result[i - 1]
-    const next = result[i + 1]
+    // 왼쪽에서 가장 가까운 유효 이웃 찾기
+    let prevIdx = -1
+    for (let j = i - 1; j >= 0; j--) {
+      if (result[j].isValid) { prevIdx = j; break }
+    }
 
-    // 양쪽 이웃이 유효해야 함
-    if (!prev.isValid || !next.isValid) continue
+    // 오른쪽에서 가장 가까운 유효 이웃 찾기
+    let nextIdx = -1
+    for (let j = i + 1; j < result.length; j++) {
+      if (result[j].isValid) { nextIdx = j; break }
+    }
 
-    // 양쪽 이웃이 서로 비슷한지 확인
-    const neighborRatio = Math.abs(prev.interval - next.interval) / Math.min(prev.interval, next.interval)
-    if (neighborRatio > neighborSimilarity) continue
+    // 양쪽 이웃이 없으면 스킵
+    if (prevIdx === -1 || nextIdx === -1) continue
 
-    // 이웃 평균 대비 현재값의 편차
-    const neighborAvg = (prev.interval + next.interval) / 2
-    const deviation = (result[i].interval - neighborAvg) / neighborAvg
+    const prev = result[prevIdx].interval
+    const next = result[nextIdx].interval
+    const curr = result[i].interval
 
-    // 양방향 스파이크 감지 (위쪽: 보상 휴지기, 아래쪽: 커플링 인터벌)
-    if (Math.abs(deviation) > spikeThreshold) {
+    // 양쪽 이웃이 서로 비슷한지 (±25%)
+    const neighborDiff = Math.abs(prev - next) / Math.min(prev, next)
+    if (neighborDiff > 0.25) continue
+
+    // 이웃 평균 대비 현재값 편차
+    const neighborAvg = (prev + next) / 2
+    const deviation = Math.abs(curr - neighborAvg) / neighborAvg
+
+    if (deviation > spikeThreshold) {
       result[i].isValid = false
       spikeIndices.push(i)
     }
@@ -102,17 +124,18 @@ function detectIsolatedSpikes(
   return { result, spikeIndices }
 }
 
+// ============================================================
+// 3단계: 연속 급변 감지
+// ============================================================
+
 /**
- * 3단계: 연속 이소성 감지.
- *
- * 연속 2개 이상 비정상 인터벌 (VPC 커플링+보상 쌍):
- * ...950, [600, 1400], 950...
- *
- * 연속된 인터벌 중 하나가 짧고 하나가 긴 패턴.
+ * 인접한 두 인터벌의 비율이 급격하게 변하는 경우.
+ * 전역 중앙값을 기준으로 어느 쪽이 이탈인지 판별.
  */
 function detectConsecutiveEctopic(
   rrIntervals: RRInterval[],
-  ratioThreshold: number = 0.30,
+  ratioThreshold: number,
+  globalMedian: number,
 ): { result: RRInterval[]; pairIndices: number[] } {
   const result = rrIntervals.map(rr => ({ ...rr }))
   const pairIndices: number[] = []
@@ -122,32 +145,17 @@ function detectConsecutiveEctopic(
 
     const ratio = result[i].interval / result[i - 1].interval
 
-    // 급격한 변화: >1.3x 또는 <0.77x (30% 이상 변화)
     if (ratio > (1 + ratioThreshold) || ratio < 1 / (1 + ratioThreshold)) {
-      // 앞 인터벌과 뒤 인터벌 모두 확인
-      // 이전이 정상이고 현재가 비정상인지, 아니면 둘 다 비정상인지 판단
+      // 전역 중앙값과 비교해서 어느 쪽이 이탈인지 판별
+      const prevDev = Math.abs(result[i - 1].interval - globalMedian) / globalMedian
+      const currDev = Math.abs(result[i].interval - globalMedian) / globalMedian
 
-      // 전전 인터벌이 있으면 기준으로 사용
-      if (i >= 2 && result[i - 2].isValid) {
-        const baseInterval = result[i - 2].interval
-        const prevDev = Math.abs(result[i - 1].interval - baseInterval) / baseInterval
-        const currDev = Math.abs(result[i].interval - baseInterval) / baseInterval
-
-        // 이전이 기준에서 크게 벗어나면 → 이전이 ectopic
-        if (prevDev > ratioThreshold) {
-          result[i - 1].isValid = false
-          if (!pairIndices.includes(i - 1)) pairIndices.push(i - 1)
-        }
-        // 현재가 기준에서 크게 벗어나면 → 현재가 ectopic
-        if (currDev > ratioThreshold) {
-          result[i].isValid = false
-          if (!pairIndices.includes(i)) pairIndices.push(i)
-        }
-      } else {
-        // 기준 없으면 둘 다 의심
+      if (prevDev > ratioThreshold * 0.8) {
         result[i - 1].isValid = false
-        result[i].isValid = false
         if (!pairIndices.includes(i - 1)) pairIndices.push(i - 1)
+      }
+      if (currDev > ratioThreshold * 0.8) {
+        result[i].isValid = false
         if (!pairIndices.includes(i)) pairIndices.push(i)
       }
     }
@@ -156,60 +164,29 @@ function detectConsecutiveEctopic(
   return { result, pairIndices }
 }
 
+// ============================================================
+// 4단계: NN 경계 인터벌 제외
+// ============================================================
+
 /**
- * 4단계: NN 경계 인터벌 제외.
- *
- * ESC/NASPE 가이드라인: HRV는 NN(Normal-to-Normal) 인터벌만 사용.
- * 이소성 비트 직전/직후 인터벌은 "정상→이소성" 또는 "이소성→정상"
- * 경계이므로 NN이 아님 → 제외.
+ * 이소성 비트 직전/직후 인터벌은 NN이 아니므로 제외.
  */
 function excludeNNBoundaries(
   rrIntervals: RRInterval[],
-  ectopicIndices: number[],
+  ectopicIndices: Set<number>,
 ): RRInterval[] {
   const result = rrIntervals.map(rr => ({ ...rr }))
-  const exclusionSet = new Set(ectopicIndices)
 
   for (const idx of ectopicIndices) {
-    // 직전 인터벌 (아직 유효하면)
-    if (idx > 0 && result[idx - 1].isValid && !exclusionSet.has(idx - 1)) {
+    if (idx > 0 && result[idx - 1].isValid && !ectopicIndices.has(idx - 1)) {
       result[idx - 1].isValid = false
-      exclusionSet.add(idx - 1)
     }
-    // 직후 인터벌
-    if (idx < result.length - 1 && result[idx + 1].isValid && !exclusionSet.has(idx + 1)) {
+    if (idx < result.length - 1 && result[idx + 1].isValid && !ectopicIndices.has(idx + 1)) {
       result[idx + 1].isValid = false
-      exclusionSet.add(idx + 1)
     }
   }
 
   return result
-}
-
-/**
- * 5단계: 최종 검증 — 정제 후 중앙값 재확인.
- *
- * 모든 필터를 거친 후에도 유효한 인터벌 중
- * 새 중앙값에서 >25% 벗어나는 것이 있으면 추가 제거.
- */
-function finalMedianValidation(
-  rrIntervals: RRInterval[],
-  threshold: number = 0.25,
-): RRInterval[] {
-  const validValues = rrIntervals.filter(r => r.isValid).map(r => r.interval)
-  if (validValues.length < 3) return rrIntervals
-
-  const median = computeMedian(validValues)
-
-  return rrIntervals.map(rr => {
-    if (!rr.isValid) return rr
-
-    const deviation = Math.abs(rr.interval - median) / median
-    if (deviation > threshold) {
-      return { ...rr, isValid: false }
-    }
-    return rr
-  })
 }
 
 // ============================================================
@@ -228,10 +205,9 @@ export interface ArrhythmiaAnalysis {
 
 function analyzeArrhythmia(
   totalIntervals: number,
-  ectopicIndices: number[],
+  ectopicCount: number,
   validNNCount: number,
 ): ArrhythmiaAnalysis {
-  const ectopicCount = ectopicIndices.length
   const ectopicRatio = totalIntervals > 0 ? ectopicCount / totalIntervals : 0
 
   if (ectopicRatio >= 0.20) {
@@ -242,7 +218,7 @@ function analyzeArrhythmia(
       validNNCount,
       burden: 'excessive',
       hrvMeasurable: false,
-      message: '비정상 리듬(부정맥 의심)이 다수 감지되어 HRV를 정확하게 측정하기 어렵습니다. 부정맥이 의심되는 경우 전문의 상담을 권장합니다.',
+      message: '비정상 리듬이 다수 감지되어 HRV를 정확하게 측정하기 어렵습니다. 반복적으로 나타나면 전문의 상담을 권장합니다.',
     }
   }
 
@@ -254,7 +230,7 @@ function analyzeArrhythmia(
       validNNCount,
       burden: 'borderline',
       hrvMeasurable: validNNCount >= 20,
-      message: `비정상 박동이 일부 감지되었습니다 (${Math.round(ectopicRatio * 100)}%). 정상 리듬 구간만으로 HRV를 분석하였습니다.`,
+      message: `비정상 박동이 일부 감지되었습니다 (${ectopicCount}회, ${Math.round(ectopicRatio * 100)}%). 정상 리듬 구간만으로 HRV를 분석하였습니다.`,
     }
   }
 
@@ -265,7 +241,9 @@ function analyzeArrhythmia(
     validNNCount,
     burden: 'normal',
     hrvMeasurable: validNNCount >= 10,
-    message: '',
+    message: ectopicCount > 0
+      ? `이소성 박동 ${ectopicCount}회 감지, 정상 범위입니다.`
+      : '',
   }
 }
 
@@ -274,15 +252,15 @@ function analyzeArrhythmia(
 // ============================================================
 
 /**
- * 전체 RR 아티팩트 제거 + 부정맥 분석 파이프라인.
+ * RR 아티팩트 제거 + 부정맥 분석 파이프라인.
  *
- * 순서:
- * 1. 전역 중앙값 기반 극단값 제거 (±35%)
- * 2. 고립 스파이크 감지 (양쪽 이웃 대비 ±25%)
- * 3. 연속 이소성 감지 (급격 비율 변화 >30%)
- * 4. NN 경계 인터벌 제외
- * 5. 최종 중앙값 재검증 (±25%)
- * 6. 부정맥 부담도 분석
+ * 1. MAD 기반 강건 필터 (k=3.0) — 극단 아웃라이어 제거
+ * 2. MAD 재적용 (k=2.5) — 1차 제거 후 정밀 필터
+ * 3. 고립 스파이크 감지 (이웃 대비 20%)
+ * 4. 연속 급변 감지 (비율 >25%)
+ * 5. NN 경계 인터벌 제외
+ * 6. 최종 MAD 검증 (k=2.0)
+ * 7. 부정맥 부담도 분석
  */
 export function cleanRRIntervalsWithArrhythmia(
   rrIntervals: RRInterval[],
@@ -304,31 +282,44 @@ export function cleanRRIntervalsWithArrhythmia(
     }
   }
 
-  // 1. 전역 중앙값 기반 극단값 제거
-  let cleaned = filterByGlobalMedian(rrIntervals, 0.35)
+  // 모든 단계에서 제거된 인덱스를 추적
+  const allRemovedIndices = new Set<number>()
 
-  // 2. 고립 스파이크 감지
-  const { result: spikeResult, spikeIndices } = detectIsolatedSpikes(cleaned, 0.25, 0.20)
+  // 1. MAD 기반 1차 필터 (k=3.0, 보수적)
+  let { result: cleaned, removedIndices: removed1 } = filterByMAD(rrIntervals, 3.0)
+  removed1.forEach(i => allRemovedIndices.add(i))
+
+  // 2. MAD 2차 필터 (k=2.5, 정밀)
+  const { result: cleaned2, removedIndices: removed2 } = filterByMAD(cleaned, 2.5)
+  cleaned = cleaned2
+  removed2.forEach(i => allRemovedIndices.add(i))
+
+  // 3. 고립 스파이크 감지 (20% 편차)
+  const { result: spikeResult, spikeIndices } = detectIsolatedSpikes(cleaned, 0.20)
   cleaned = spikeResult
+  spikeIndices.forEach(i => allRemovedIndices.add(i))
 
-  // 3. 연속 이소성 감지
-  const { result: pairResult, pairIndices } = detectConsecutiveEctopic(cleaned, 0.30)
+  // 전역 중앙값 계산 (현재 유효한 인터벌 기준)
+  const validForMedian = cleaned.filter(r => r.isValid).map(r => r.interval)
+  const globalMed = median(validForMedian)
+
+  // 4. 연속 급변 감지 (25% 비율 변화)
+  const { result: pairResult, pairIndices } = detectConsecutiveEctopic(cleaned, 0.25, globalMed)
   cleaned = pairResult
+  pairIndices.forEach(i => allRemovedIndices.add(i))
 
-  // 전체 이소성 인덱스 취합
-  const allEctopicIndices = [...new Set([...spikeIndices, ...pairIndices])]
+  // 5. NN 경계 인터벌 제외
+  cleaned = excludeNNBoundaries(cleaned, allRemovedIndices)
 
-  // 4. NN 경계 인터벌 제외
-  cleaned = excludeNNBoundaries(cleaned, allEctopicIndices)
+  // 6. 최종 MAD 검증 (k=2.0, 엄격)
+  const { result: finalResult, removedIndices: removedFinal } = filterByMAD(cleaned, 2.0)
+  cleaned = finalResult
+  removedFinal.forEach(i => allRemovedIndices.add(i))
 
-  // 5. 최종 중앙값 재검증
-  cleaned = finalMedianValidation(cleaned, 0.25)
-
-  // 6. 부정맥 분석
-  // 전체 이소성 수 = 원래 무효화된 수 (경계 제외 포함)
+  // 7. 부정맥 분석
   const finalValid = cleaned.filter(r => r.isValid).length
-  const totalInvalidated = totalCount - finalValid
-  const arrhythmia = analyzeArrhythmia(totalCount, allEctopicIndices, finalValid)
+  const ectopicCount = allRemovedIndices.size
+  const arrhythmia = analyzeArrhythmia(totalCount, ectopicCount, finalValid)
 
   return { cleaned, arrhythmia }
 }
@@ -357,7 +348,7 @@ export function getRRStats(rrIntervals: RRInterval[]): {
     return { validCount: 0, totalCount, rejectionRate: 1, medianRR: 0, medianHR: 0 }
   }
 
-  const medianRR = computeMedian(valid.map(r => r.interval))
+  const medianRR = median(valid.map(r => r.interval))
   const medianHR = Math.round(60000 / medianRR)
 
   return {
