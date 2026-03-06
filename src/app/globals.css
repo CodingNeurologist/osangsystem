@@ -70,11 +70,16 @@
     box-sizing: border-box;
   }
 
+  html {
+    overscroll-behavior: none;
+  }
+
   body {
     @apply bg-background text-foreground antialiased;
     font-feature-settings: 'kern' 1;
     word-break: keep-all;
     overflow-wrap: break-word;
+    overscroll-behavior-y: contain;
   }
 
   h1, h2, h3, h4, h5, h6 {

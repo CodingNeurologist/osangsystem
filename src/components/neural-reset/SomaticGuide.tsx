@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { ArrowLeft, Play, Pause, SkipForward, CheckCircle2 } from 'lucide-react'
+import { ArrowLeft, Play, Pause, SkipForward, CheckCircle2, Volume2, VolumeX } from 'lucide-react'
 import type { SomaticExercise } from '@/types'
 import SomaticIllustration from './somatic-illustrations/SomaticIllustration'
+import { useVoiceGuide } from '@/hooks/useVoiceGuide'
 
 interface SomaticGuideProps {
   exercise: SomaticExercise
@@ -20,8 +21,13 @@ export default function SomaticGuide({ exercise, onBack, onComplete }: SomaticGu
   const [paused, setPaused] = useState(false)
   const [preDistress, setPreDistress] = useState<number | null>(null)
   const [postDistress, setPostDistress] = useState<number | null>(null)
+  const [voiceEnabled, setVoiceEnabled] = useState(true)
   const elapsedRef = useRef(0)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const { speak, stop: stopVoice, preload, isSupported: voiceSupported, isSpeaking, isCloudTTS } = useVoiceGuide({
+    enabled: voiceEnabled,
+  })
 
   const steps = exercise.steps
 
@@ -58,6 +64,37 @@ export default function SomaticGuide({ exercise, onBack, onComplete }: SomaticGu
     return clearTimer
   }, [phase, paused, currentStep, steps, clearTimer])
 
+  // 운동 대기 화면에서 모든 스텝 오디오 미리 로드
+  useEffect(() => {
+    if (phase === 'ready') {
+      const texts = steps.map((s) => s.instruction)
+      texts.push('수고하셨습니다. 운동이 끝났습니다.')
+      preload(texts)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase])
+
+  // 스텝 변경 시 음성 안내
+  useEffect(() => {
+    if (phase === 'active' && !paused) {
+      speak(steps[currentStep].instruction)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStep, phase])
+
+  // 일시정지 시 음성도 중단
+  useEffect(() => {
+    if (paused) stopVoice()
+  }, [paused, stopVoice])
+
+  // 완료 시 음성 안내
+  useEffect(() => {
+    if (phase === 'done') {
+      speak('수고하셨습니다. 운동이 끝났습니다.')
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase])
+
   const handleStart = () => {
     if (preDistress === null) return
     setCurrentStep(0)
@@ -67,6 +104,7 @@ export default function SomaticGuide({ exercise, onBack, onComplete }: SomaticGu
   }
 
   const handleSkipStep = () => {
+    stopVoice()
     if (currentStep < steps.length - 1) {
       setCurrentStep((s) => s + 1)
       setStepTimeLeft(steps[currentStep + 1].durationSec)
@@ -211,12 +249,35 @@ export default function SomaticGuide({ exercise, onBack, onComplete }: SomaticGu
         />
       </div>
 
-      {/* Step counter */}
+      {/* Step counter + voice toggle */}
       <div className="flex items-center justify-between">
         <span className="text-xs text-zinc-400">
           {currentStep + 1} / {steps.length}
         </span>
-        <span className="text-xs text-zinc-400">{exercise.name}</span>
+        <div className="flex items-center gap-2">
+          {voiceSupported && (
+            <button
+              onClick={() => {
+                setVoiceEnabled(!voiceEnabled)
+                if (voiceEnabled) stopVoice()
+              }}
+              className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs transition-colors ${
+                voiceEnabled
+                  ? 'bg-zinc-900 text-white'
+                  : 'bg-zinc-100 text-zinc-400'
+              }`}
+              aria-label={voiceEnabled ? '음성 안내 끄기' : '음성 안내 켜기'}
+            >
+              {voiceEnabled ? (
+                <Volume2 className={`h-3 w-3 ${isSpeaking ? 'animate-pulse' : ''}`} />
+              ) : (
+                <VolumeX className="h-3 w-3" />
+              )}
+              음성{isCloudTTS && <span className="text-[10px] opacity-60">HD</span>}
+            </button>
+          )}
+          <span className="text-xs text-zinc-400">{exercise.name}</span>
+        </div>
       </div>
 
       {/* Illustration */}

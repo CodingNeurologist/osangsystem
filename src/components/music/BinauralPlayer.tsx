@@ -341,6 +341,10 @@ export default function BinauralPlayer({ onSessionComplete }: BinauralPlayerProp
         <Headphones className="h-4 w-4" />
         <AlertDescription>
           헤드폰이나 이어폰을 착용하면 바이노럴 비트 효과를 더 잘 느낄 수 있습니다.
+          <br />
+          <span className="text-zinc-400">
+            소리가 나지 않는다면 기기의 무음 모드를 해제해 주세요.
+          </span>
         </AlertDescription>
       </Alert>
 

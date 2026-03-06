@@ -20,7 +20,7 @@ export default async function AppLayout({
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen-safe bg-background">
       <AppNav />
       <main className="max-w-2xl mx-auto px-4 py-6 pb-24">
         {children}
