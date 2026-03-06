@@ -37,7 +37,9 @@ export function runCalibration(
   const avgRed = samples.reduce((a, b) => a + b, 0) / samples.length
 
   // 1. 강도 범위 확인
-  if (avgRed > 220) {
+  // 플래시+손가락 = Red 평균 180~254가 정상 (기기마다 다름)
+  // 완전 포화(255.0)만 거부, 높은 값은 오히려 좋은 신호
+  if (avgRed > 254.5) {
     return {
       isValid: false,
       baselineAmplitude: 0,
@@ -45,11 +47,11 @@ export function runCalibration(
       noiseFloor: 0,
       avgRedIntensity: avgRed,
       peakFrequency: 0,
-      message: '카메라가 과포화되었습니다. 손가락 압력을 조금 줄여주세요.',
+      message: `완전 포화 상태입니다 (R:${avgRed.toFixed(0)}). 손가락을 살짝 떼어주세요.`,
     }
   }
 
-  if (avgRed < 30) {
+  if (avgRed < 20) {
     return {
       isValid: false,
       baselineAmplitude: 0,
@@ -57,11 +59,12 @@ export function runCalibration(
       noiseFloor: 0,
       avgRedIntensity: avgRed,
       peakFrequency: 0,
-      message: '신호가 감지되지 않습니다. 후면 카메라 위에 손가락을 올려주세요.',
+      message: `신호 미감지 (R:${avgRed.toFixed(0)}). 후면 카메라 위에 손가락을 올려주세요.`,
     }
   }
 
   // 2. AC 비율 (변동성) 확인
+  // PPG 변동은 매우 작을 수 있음 (0.01~5% 정도)
   let sumSq = 0
   for (const s of samples) {
     const diff = s - avgRed
@@ -70,7 +73,8 @@ export function runCalibration(
   const std = Math.sqrt(sumSq / (samples.length - 1))
   const acRatio = std / avgRed
 
-  if (acRatio < 0.0005) {
+  // 변동이 너무 없으면 일정한 빛 (손가락 없음 or 완전 밀착)
+  if (acRatio < 0.00005) {
     return {
       isValid: false,
       baselineAmplitude: 0,
@@ -78,11 +82,12 @@ export function runCalibration(
       noiseFloor: 0,
       avgRedIntensity: avgRed,
       peakFrequency: 0,
-      message: '맥박 신호가 약합니다. 손가락이 카메라를 완전히 덮도록 해주세요.',
+      message: `맥박 신호 약함 (R:${avgRed.toFixed(0)}, AC:${(acRatio * 100).toFixed(4)}%). 손가락 위치를 조정해 주세요.`,
     }
   }
 
-  if (acRatio > 0.08) {
+  // 변동이 너무 크면 움직임
+  if (acRatio > 0.20) {
     return {
       isValid: false,
       baselineAmplitude: 0,
@@ -90,7 +95,7 @@ export function runCalibration(
       noiseFloor: 0,
       avgRedIntensity: avgRed,
       peakFrequency: 0,
-      message: '움직임이 감지됩니다. 손가락을 움직이지 말고 가만히 놓아주세요.',
+      message: `움직임 감지 (AC:${(acRatio * 100).toFixed(1)}%). 손가락을 가만히 놓아주세요.`,
     }
   }
 
@@ -118,7 +123,7 @@ export function runCalibration(
 
   const spectralRatio = totalPower > 0 ? maxPower / totalPower : 0
 
-  if (spectralRatio < 0.15 || peakFreq < 0.5) {
+  if (spectralRatio < 0.10 || peakFreq < 0.5) {
     return {
       isValid: false,
       baselineAmplitude: std,
@@ -126,7 +131,7 @@ export function runCalibration(
       noiseFloor: 0,
       avgRedIntensity: avgRed,
       peakFrequency: peakFreq,
-      message: '명확한 맥박이 감지되지 않습니다. 손가락 위치를 조정해 주세요.',
+      message: `맥박 미감지 (R:${avgRed.toFixed(0)}, f:${peakFreq.toFixed(1)}Hz, r:${(spectralRatio * 100).toFixed(0)}%). 손가락 위치를 조정해 주세요.`,
     }
   }
 

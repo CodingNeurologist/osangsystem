@@ -44,6 +44,7 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
   const [sqiScore, setSqiScore] = useState(0)
   const [result, setResult] = useState<HRVResult | null>(null)
   const [torchWarning, setTorchWarning] = useState(false)
+  const [debugInfo, setDebugInfo] = useState({ red: 0, green: 0, ac: 0, fps: 0 })
 
   // ── Ref (실시간 데이터, React 렌더링 회피) ──────────
   const cameraRef = useRef<CameraController | null>(null)
@@ -54,6 +55,8 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
   const startTimeRef = useRef(0)
   const lastFrameTimeRef = useRef(0)
   const sampleIndexRef = useRef(0)
+  const frameCountRef = useRef(0)
+  const fpsTimerRef = useRef(0)
 
   // DSP 모듈
   const signalBufferRef = useRef(new CircularBuffer(DEFAULT_PPG_CONFIG.bufferSize))
@@ -105,6 +108,10 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
       // 가속도계 초기화
       motionDetectorRef.current.initAccelerometer()
 
+      // signalBuffer 초기화 (보정 중에도 파형 표시용)
+      signalBufferRef.current.clear()
+      filteredBufferRef.current.clear()
+
       // 보정 시작
       phaseRef.current = 'calibrating'
       setPhase('calibrating')
@@ -115,6 +122,8 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
         startTime: performance.now(),
       }
       calibrationAttemptRef.current = 0
+      frameCountRef.current = 0
+      fpsTimerRef.current = performance.now()
 
       // 프레임 처리 시작
       lastFrameTimeRef.current = 0
@@ -143,13 +152,17 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
       return
     }
 
-    // 프레임 레이트 제한 (~30fps)
+    // 프레임 레이트 제한 (~30fps, 최소 25ms 간격)
     const dt = frame.timestamp - lastFrameTimeRef.current
-    if (dt < 28) {
+    if (dt < 25) {
       rafRef.current = requestAnimationFrame(processFrame)
       return
     }
     lastFrameTimeRef.current = frame.timestamp
+    frameCountRef.current++
+
+    // 보정/측정 공통: signalBuffer에 raw 데이터 넣기 (파형 표시용)
+    signalBufferRef.current.push(frame.redMean)
 
     // ── 보정 단계 ───
     if (phaseRef.current === 'calibrating') {
@@ -158,6 +171,27 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
 
       const calibElapsed = (frame.timestamp - calibrationRef.current.startTime) / 1000
       setElapsed(Math.floor(calibElapsed))
+
+      // 디버그 정보 업데이트 (~4Hz)
+      if (frameCountRef.current % 8 === 0) {
+        const now = performance.now()
+        const fpsDt = (now - fpsTimerRef.current) / 1000
+        const fps = fpsDt > 0 ? frameCountRef.current / fpsDt : 0
+
+        // AC 비율 간이 계산
+        const recentSamples = calibrationRef.current.samples.slice(-30)
+        const mean = recentSamples.reduce((a, b) => a + b, 0) / recentSamples.length
+        let acSum = 0
+        for (const s of recentSamples) acSum += (s - mean) ** 2
+        const acStd = Math.sqrt(acSum / Math.max(recentSamples.length - 1, 1))
+
+        setDebugInfo({
+          red: Math.round(frame.redMean * 10) / 10,
+          green: Math.round(frame.greenMean * 10) / 10,
+          ac: mean > 0 ? Math.round((acStd / mean) * 10000) / 100 : 0,
+          fps: Math.round(fps),
+        })
+      }
 
       if (calibElapsed >= DEFAULT_PPG_CONFIG.calibrationDuration) {
         const calResult = runCalibration(calibrationRef.current, DEFAULT_PPG_CONFIG.sampleRate)
@@ -183,16 +217,16 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
           startTimeRef.current = performance.now()
           setElapsed(0)
         } else {
-          // 재시도 (최대 3회)
+          // 재시도 (최대 5회로 증가)
           calibrationAttemptRef.current++
-          if (calibrationAttemptRef.current >= 3) {
+          if (calibrationAttemptRef.current >= 5) {
             phaseRef.current = 'error'
             setPhase('error')
             setErrorMessage('보정에 실패했습니다. 손가락 위치를 확인하고 다시 시도해 주세요.')
             cleanup()
             return
           }
-          // 보정 리셋
+          // 보정 리셋 (signalBuffer는 유지하여 파형 계속 표시)
           calibrationRef.current = {
             samples: [],
             timestamps: [],
@@ -215,7 +249,6 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
     const filtered = bandpassRef.current.process(detrended)
 
     // 버퍼 저장
-    signalBufferRef.current.push(frame.redMean)
     filteredBufferRef.current.push(filtered)
 
     // 피크 검출
@@ -267,6 +300,16 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
       )
       setSqiScore(sqi.score)
 
+      // 디버그 정보
+      const now = performance.now()
+      const fpsDt = (now - fpsTimerRef.current) / 1000
+      setDebugInfo({
+        red: Math.round(frame.redMean * 10) / 10,
+        green: Math.round(frame.greenMean * 10) / 10,
+        ac: 0,
+        fps: fpsDt > 0 ? Math.round(frameCountRef.current / fpsDt) : 0,
+      })
+
       // 측정 완료 확인
       if (measureElapsed >= DEFAULT_PPG_CONFIG.measurementDuration) {
         finalizeMeasurement()
@@ -287,7 +330,7 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
     const validRR = rrIntervalsRef.current.filter(r => r.isValid)
 
     if (validRR.length < 10) {
-      setErrorMessage('유효한 심박 데이터가 부족합니다. 손가락을 카메라에 밀착하고 다시 시도해 주세요.')
+      setErrorMessage(`유효 비트 부족 (${validRR.length}개). 손가락을 카메라에 밀착하고 다시 시도해 주세요.`)
       setPhase('error')
       phaseRef.current = 'error'
       return
@@ -349,7 +392,11 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
     setCurrentBPM(0)
     setSqiScore(0)
     setTorchWarning(false)
+    setDebugInfo({ red: 0, green: 0, ac: 0, fps: 0 })
   }, [cleanup])
+
+  // 카메라가 활성화된 단계인지 여부
+  const isCameraActive = phase === 'calibrating' || phase === 'measuring'
 
   // ── 렌더링 ─────────────────────────────────────────
   return (
@@ -365,8 +412,26 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
         </Link>
       )}
 
-      {/* 숨겨진 비디오/캔버스 (카메라 캡처용) */}
-      <video ref={videoRef} className="hidden" playsInline muted />
+      {/* 비디오 (카메라 활성 시 작게 표시, 아닐 때 숨김) */}
+      <div className={isCameraActive ? 'block' : 'hidden'}>
+        <div className="relative">
+          <video
+            ref={videoRef}
+            className="w-full max-w-[200px] mx-auto rounded-xl border-2 border-zinc-200"
+            style={{ height: 150, objectFit: 'cover' }}
+            playsInline
+            muted
+          />
+          {/* 카메라 위 디버그 오버레이 */}
+          <div className="absolute bottom-1 left-1 right-1 bg-black/60 rounded-lg px-2 py-1 text-[10px] text-white font-mono tabular-nums flex justify-between">
+            <span>R:{debugInfo.red}</span>
+            <span>G:{debugInfo.green}</span>
+            <span>AC:{debugInfo.ac}%</span>
+            <span>{debugInfo.fps}fps</span>
+          </div>
+        </div>
+      </div>
+      {/* 숨겨진 캔버스 (픽셀 추출용) */}
       <canvas ref={canvasRef} className="hidden" />
 
       {/* ─── idle: 안내 화면 ─── */}
@@ -384,9 +449,14 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
 
       {/* ─── calibrating: 보정 중 ─── */}
       {phase === 'calibrating' && (
-        <div className="space-y-6 py-4">
+        <div className="space-y-4 py-2">
           <div className="text-center space-y-2">
-            <h2 className="text-lg font-semibold text-zinc-900">보정 중</h2>
+            <div className="flex items-center justify-center gap-2">
+              <h2 className="text-lg font-semibold text-zinc-900">보정 중</h2>
+              <Badge variant="outline" className="text-amber-600 border-amber-300 text-xs">
+                {calibrationAttemptRef.current > 0 ? `${calibrationAttemptRef.current + 1}차 시도` : ''}
+              </Badge>
+            </div>
             <p className="text-sm text-zinc-500">{calibrationMessage}</p>
             {torchWarning && (
               <p className="text-xs text-amber-600">
@@ -409,10 +479,15 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
             </span>
           </div>
 
+          {/* 보정 중에도 raw 신호 파형 표시 */}
           <PPGWaveform
             signalBuffer={signalBufferRef.current}
             isActive={true}
           />
+
+          <p className="text-xs text-zinc-400 text-center">
+            카메라 화면이 붉게 보이면 올바른 위치입니다
+          </p>
 
           <Button variant="outline" onClick={handleStop} className="w-full">
             취소
@@ -454,19 +529,19 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
             </div>
           </div>
 
-          {/* 파형 */}
+          {/* 필터된 파형 */}
           <PPGWaveform
             signalBuffer={filteredBufferRef.current}
             isActive={true}
           />
 
           {/* 상태 정보 */}
-          <div className="flex justify-between text-xs text-zinc-400">
+          <div className="flex justify-between text-xs text-zinc-400 tabular-nums">
             <span>유효 비트: {rrIntervalsRef.current.filter(r => r.isValid).length}</span>
-            <span>신호 품질: {sqiScore}%</span>
+            <span>R:{debugInfo.red} | SQI:{sqiScore}%</span>
           </div>
 
-          {/* 중지 버튼 (최소 30초 이후) */}
+          {/* 중지 버튼 */}
           <Button
             variant="outline"
             onClick={handleStop}
