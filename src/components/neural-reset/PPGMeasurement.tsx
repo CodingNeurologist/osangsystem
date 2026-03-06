@@ -405,6 +405,7 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
     setResult(hrvResult)
     setPhase('results')
     phaseRef.current = 'results'
+    window.scrollTo({ top: 0, behavior: 'smooth' })
 
     onSessionComplete?.(Math.round(measureDuration), hrvResult)
   }, [cleanup, onSessionComplete])
