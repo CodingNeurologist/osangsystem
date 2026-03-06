@@ -395,8 +395,8 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
     setDebugInfo({ red: 0, green: 0, ac: 0, fps: 0 })
   }, [cleanup])
 
-  // 카메라가 활성화된 단계인지 여부
-  const isCameraActive = phase === 'calibrating' || phase === 'measuring'
+  // 카메라가 활성화된 단계인지 여부 (permission부터 보여야 video.play() 동작)
+  const showCamera = phase === 'permission' || phase === 'calibrating' || phase === 'measuring'
 
   // ── 렌더링 ─────────────────────────────────────────
   return (
@@ -412,27 +412,38 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
         </Link>
       )}
 
-      {/* 비디오 (카메라 활성 시 작게 표시, 아닐 때 숨김) */}
-      <div className={isCameraActive ? 'block' : 'hidden'}>
-        <div className="relative">
+      {/*
+        비디오: display:none 대신 높이/투명도로 숨김.
+        display:none이면 일부 브라우저에서 video.play()가 작동하지 않음.
+      */}
+      <div
+        className="transition-all duration-300 overflow-hidden"
+        style={{
+          maxHeight: showCamera ? 200 : 0,
+          opacity: showCamera ? 1 : 0,
+        }}
+      >
+        <div className="relative flex justify-center">
           <video
             ref={videoRef}
-            className="w-full max-w-[200px] mx-auto rounded-xl border-2 border-zinc-200"
-            style={{ height: 150, objectFit: 'cover' }}
+            className="w-[200px] h-[150px] rounded-xl border-2 border-zinc-200 object-cover bg-zinc-900"
             playsInline
             muted
+            autoPlay
           />
           {/* 카메라 위 디버그 오버레이 */}
-          <div className="absolute bottom-1 left-1 right-1 bg-black/60 rounded-lg px-2 py-1 text-[10px] text-white font-mono tabular-nums flex justify-between">
-            <span>R:{debugInfo.red}</span>
-            <span>G:{debugInfo.green}</span>
-            <span>AC:{debugInfo.ac}%</span>
-            <span>{debugInfo.fps}fps</span>
-          </div>
+          {(phase === 'calibrating' || phase === 'measuring') && (
+            <div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-[192px] bg-black/60 rounded-lg px-2 py-1 text-[10px] text-white font-mono tabular-nums flex justify-between">
+              <span>R:{debugInfo.red}</span>
+              <span>G:{debugInfo.green}</span>
+              <span>AC:{debugInfo.ac}%</span>
+              <span>{debugInfo.fps}fps</span>
+            </div>
+          )}
         </div>
       </div>
-      {/* 숨겨진 캔버스 (픽셀 추출용) */}
-      <canvas ref={canvasRef} className="hidden" />
+      {/* 캔버스: 픽셀 추출 전용. 크기 0으로 숨기되 display:none 사용 안 함 */}
+      <canvas ref={canvasRef} style={{ position: 'absolute', width: 0, height: 0, opacity: 0, pointerEvents: 'none' }} />
 
       {/* ─── idle: 안내 화면 ─── */}
       {phase === 'idle' && (
