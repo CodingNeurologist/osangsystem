@@ -285,8 +285,9 @@ export default function PPGMeasurement({ onSessionComplete }: PPGMeasurementProp
         if (peaks.length >= 2) {
           const prevPeak = peaks[peaks.length - 2]
           const rrMs = peak.timestamp - prevPeak.timestamp
-          // 생리학적 범위: 333ms (180BPM) ~ 1500ms (40BPM)
-          if (rrMs > 333 && rrMs < 1500) {
+          // 생리학적 범위: 300ms (200BPM) ~ 2200ms (27BPM)
+          // VPC 보상 휴지기(~2000ms)도 포함해야 아티팩트 파이프라인에서 감지 가능
+          if (rrMs > 300 && rrMs < 2200) {
             rrIntervalsRef.current.push({
               interval: rrMs,
               timestamp: peak.timestamp,
